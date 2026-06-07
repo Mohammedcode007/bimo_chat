@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/utils/responsive.dart';
 import '../data/chat_item_model.dart';
 import 'chat_screen.dart';
 import 'widgets/chat_tile.dart';
 import 'widgets/chats_search_bar.dart';
+import 'widgets/chats_header.dart';
+import '../../settings/presentation/settings_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -13,6 +17,7 @@ class ChatsScreen extends StatefulWidget {
 
 class _ChatsScreenState extends State<ChatsScreen> {
   final searchController = TextEditingController();
+
   String query = '';
 
   final List<ChatItemModel> chats = const [
@@ -121,7 +126,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
   List<ChatItemModel> get filteredChats {
     final text = query.trim().toLowerCase();
 
-    if (text.isEmpty) return chats;
+    if (text.isEmpty) {
+      return chats;
+    }
 
     return chats.where((chat) {
       return chat.name.toLowerCase().contains(text) ||
@@ -148,6 +155,38 @@ class _ChatsScreenState extends State<ChatsScreen> {
     });
   }
 
+  void openProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingScreen()),
+    );
+  }
+
+  void openNotifications() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Notifications'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingScreen()),
+    );
+  }
+
+  void logout() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Logout'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -157,35 +196,42 @@ class _ChatsScreenState extends State<ChatsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
+          ChatsHeader(
+            onAvatarTap: openProfile,
+            onNotificationTap: openNotifications,
+            onSettingsTap: openSettings,
+            onLogoutTap: logout,
+          ),
+
           ChatsSearchBar(controller: searchController, onChanged: updateSearch),
 
-          if (items.isEmpty)
-            Expanded(
-              child: Center(
-                child: Text(
-                  'No chats found',
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final chat = items[index];
+          Expanded(
+            child: items.isEmpty
+                ? Center(
+                    child: Text(
+                      'No chats found',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: R.sp(context, 16),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.only(
+                      top: R.size(context, 2),
+                      bottom: R.size(context, 8),
+                    ),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final chat = items[index];
 
-                  return ChatTile(chat: chat, onTap: () => openChat(chat));
-                },
-              ),
-            ),
+                      return ChatTile(chat: chat, onTap: () => openChat(chat));
+                    },
+                  ),
+          ),
         ],
       ),
     );

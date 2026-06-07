@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../core/widgets/main_header.dart';
-import '../../auth/presentation/login_screen.dart';
-import '../../profile/presentation/profile_screen.dart';
+
 import '../../chats/presentation/chats_screen.dart';
+import '../../rooms/presentation/rooms_screen.dart';
+import '../../store/presentation/store_screen.dart';
+import '../../friends/presentation/friends_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,73 +15,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int currentIndex = 0;
 
-  String get headerTitle {
-    switch (currentIndex) {
-      case 0:
-        return 'Bimo Chat';
-      case 1:
-        return 'Rooms';
-      case 2:
-        return 'Chats';
-      case 3:
-        return 'Profile';
-      default:
-        return 'Bimo Chat';
-    }
-  }
-
-  String get headerSubtitle {
-    switch (currentIndex) {
-      case 0:
-        return 'Welcome to your social space';
-      case 1:
-        return 'Join active rooms';
-      case 2:
-        return 'Your private conversations';
-      case 3:
-        return 'Manage your account';
-      default:
-        return '';
-    }
-  }
-
   final List<Widget> screens = const [
     _HomeTab(),
-    _RoomsTab(),
+    RoomsScreen(),
     ChatsScreen(),
-    ProfileScreen(),
+    FriendsScreen(),
+    StoreScreen(),
   ];
-
-  void goToProfile() {
-    setState(() {
-      currentIndex = 3;
-    });
-  }
-
-  void logout() {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          if (currentIndex != 3)
-            MainHeader(
-              title: headerTitle,
-              subtitle: headerSubtitle,
-              avatarUrl: null,
-              onProfileTap: goToProfile,
-              onLogoutTap: logout,
-            ),
-          Expanded(child: screens[currentIndex]),
-        ],
-      ),
+      body: screens[currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
@@ -95,8 +41,8 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.groups_outlined),
-            selectedIcon: Icon(Icons.groups_rounded),
+            icon: Icon(Icons.bubble_chart_outlined),
+            selectedIcon: Icon(Icons.bubble_chart_rounded),
             label: 'Rooms',
           ),
           NavigationDestination(
@@ -105,9 +51,14 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Chats',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
+            icon: Icon(Icons.group_outlined),
+            selectedIcon: Icon(Icons.group_rounded),
+            label: 'Friends',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront_rounded),
+            label: 'Store',
           ),
         ],
       ),
@@ -120,24 +71,46 @@ class _HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Home Screen',
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: Text(
+            'Home',
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _RoomsTab extends StatelessWidget {
-  const _RoomsTab();
+class _FriendsTab extends StatelessWidget {
+  const _FriendsTab();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Rooms Screen',
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: Text(
+            'Friends',
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
       ),
     );
   }
