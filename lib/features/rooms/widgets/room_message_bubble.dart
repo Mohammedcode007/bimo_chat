@@ -10,6 +10,8 @@ class RoomMessageBubble extends StatelessWidget {
   final VoidCallback? onImageTap;
   final VoidCallback? onVoicePlay;
   final VoidCallback? onNameLongPress;
+  final VoidCallback? onAvatarTap;
+  final VoidCallback? onAvatarLongPress;
 
   const RoomMessageBubble({
     super.key,
@@ -17,6 +19,8 @@ class RoomMessageBubble extends StatelessWidget {
     this.onImageTap,
     this.onVoicePlay,
     this.onNameLongPress,
+    this.onAvatarTap,
+    this.onAvatarLongPress,
   });
 
   @override
@@ -38,12 +42,15 @@ class RoomMessageBubble extends StatelessWidget {
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isMe
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isMe) ...[
-            _AvatarSide(message: message),
+            _AvatarSide(
+              message: message,
+              onTap: onAvatarTap,
+              onLongPress: onAvatarLongPress,
+            ),
             SizedBox(width: R.size(context, 8)),
           ],
 
@@ -116,7 +123,12 @@ class RoomMessageBubble extends StatelessWidget {
 
           if (isMe) ...[
             SizedBox(width: R.size(context, 8)),
-            _AvatarSide(message: message, isMe: true),
+            _AvatarSide(
+              message: message,
+              isMe: true,
+              onTap: onAvatarTap,
+              onLongPress: onAvatarLongPress,
+            ),
           ],
         ],
       ),
@@ -143,14 +155,16 @@ class _SenderNameInside extends StatelessWidget {
       onLongPress: onLongPress,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: alignEnd
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (alignEnd && message.sender.badge != null) ...[
             Text(
               message.sender.badge!,
-              style: TextStyle(fontSize: R.sp(context, 15), height: 1),
+              style: TextStyle(
+                fontSize: R.sp(context, 15),
+                height: 1,
+              ),
             ),
             SizedBox(width: R.size(context, 5)),
           ],
@@ -162,8 +176,7 @@ class _SenderNameInside extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: alignEnd ? TextAlign.end : TextAlign.start,
               style: TextStyle(
-                color:
-                    message.sender.nameColor ??
+                color: message.sender.nameColor ??
                     colorScheme.onSurface.withValues(alpha: 0.82),
                 fontSize: R.sp(context, 18),
                 fontWeight: FontWeight.w900,
@@ -176,7 +189,10 @@ class _SenderNameInside extends StatelessWidget {
             SizedBox(width: R.size(context, 5)),
             Text(
               message.sender.badge!,
-              style: TextStyle(fontSize: R.sp(context, 15), height: 1),
+              style: TextStyle(
+                fontSize: R.sp(context, 15),
+                height: 1,
+              ),
             ),
           ],
         ],
@@ -224,9 +240,8 @@ class _MessageContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(R.size(context, 18)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: alignEnd
-              ? MainAxisAlignment.end
-              : MainAxisAlignment.start,
+          mainAxisAlignment:
+              alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
             Icon(
               Icons.play_circle_fill_rounded,
@@ -281,8 +296,15 @@ class _MessageContent extends StatelessWidget {
 class _AvatarSide extends StatelessWidget {
   final RoomChatMessageModel message;
   final bool isMe;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
-  const _AvatarSide({required this.message, this.isMe = false});
+  const _AvatarSide({
+    required this.message,
+    this.isMe = false,
+    this.onTap,
+    this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -293,17 +315,23 @@ class _AvatarSide extends StatelessWidget {
         children: [
           Align(
             alignment: AlignmentDirectional.topCenter,
-            child: _AvatarWithFrame(message: message),
+            child: GestureDetector(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: _AvatarWithFrame(message: message),
+            ),
           ),
 
           if (message.roleStarColor != Colors.transparent)
             PositionedDirectional(
               top: R.size(context, -3),
               start: R.size(context, 3),
-              child: Icon(
-                Icons.star_rounded,
-                color: message.roleStarColor,
-                size: R.size(context, 20),
+              child: IgnorePointer(
+                child: Icon(
+                  Icons.star_rounded,
+                  color: message.roleStarColor,
+                  size: R.size(context, 20),
+                ),
               ),
             ),
         ],
@@ -315,14 +343,18 @@ class _AvatarSide extends StatelessWidget {
 class _AvatarWithFrame extends StatelessWidget {
   final RoomChatMessageModel message;
 
-  const _AvatarWithFrame({required this.message});
+  const _AvatarWithFrame({
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasFrame = message.sender.frame != null;
 
     return Container(
-      padding: EdgeInsets.all(hasFrame ? R.size(context, 3) : 0),
+      padding: EdgeInsets.all(
+        hasFrame ? R.size(context, 3) : 0,
+      ),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: hasFrame
@@ -353,7 +385,9 @@ class _AvatarWithFrame extends StatelessWidget {
 class _SystemMessageBubble extends StatelessWidget {
   final RoomChatMessageModel message;
 
-  const _SystemMessageBubble({required this.message});
+  const _SystemMessageBubble({
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -373,7 +407,9 @@ class _SystemMessageBubble extends StatelessWidget {
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(R.size(context, 999)),
-            border: Border.all(color: color.withValues(alpha: 0.22)),
+            border: Border.all(
+              color: color.withValues(alpha: 0.22),
+            ),
           ),
           child: Text(
             message.text,

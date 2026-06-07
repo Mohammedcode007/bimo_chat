@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/utils/responsive.dart';
+import '../../../core/utils/responsive.dart';
 import '../data/room_chat_user_model.dart';
 import '../data/room_role.dart';
 import 'room_user_action_menu.dart';
@@ -9,7 +9,7 @@ class RoomUsersDialog extends StatelessWidget {
   final List<RoomChatUserModel> users;
   final RoomRole myRole;
   final void Function(RoomChatUserModel user, RoomUserAction action)
-  onUserAction;
+      onUserAction;
   final void Function(RoomChatUserModel user) onMessageTap;
 
   const RoomUsersDialog({
@@ -106,6 +106,8 @@ class _UserTile extends StatelessWidget {
         return Colors.red;
 
       case RoomRole.none:
+        return Colors.black;
+
       case RoomRole.member:
         return Colors.black;
     }
@@ -137,17 +139,19 @@ class _UserTile extends StatelessWidget {
         ),
 
         ...actions.map(
-          (action) => PopupMenuItem(
-            value: action,
-            height: R.size(context, 58),
-            child: Text(
-              action.label,
-              style: TextStyle(
-                fontSize: R.sp(context, 22),
-                fontWeight: FontWeight.w400,
+          (action) {
+            return PopupMenuItem(
+              value: action,
+              height: R.size(context, 58),
+              child: Text(
+                action.label,
+                style: TextStyle(
+                  fontSize: R.sp(context, 22),
+                  fontWeight: FontWeight.w400,
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ],
     );

@@ -64,5 +64,8 @@ List<RoomUserAction> allowedRoomUserActions(RoomRole myRole) {
     ];
   }
 
-  return const [RoomUserAction.message, RoomUserAction.copy];
+  return const [
+    RoomUserAction.message,
+    RoomUserAction.copy,
+  ];
 }

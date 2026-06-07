@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,6 +11,9 @@ import '../../../core/utils/responsive.dart';
 
 import '../../chats/data/chat_item_model.dart';
 import '../../chats/presentation/chat_screen.dart';
+
+import '../../user_profile/data/user_profile_model.dart';
+import '../../user_profile/presentation/user_profile_screen.dart';
 
 import '../data/room_model.dart';
 import '../data/room_role.dart';
@@ -30,7 +34,10 @@ import 'room_settings_screen.dart';
 class RoomChatScreen extends StatefulWidget {
   final RoomModel room;
 
-  const RoomChatScreen({super.key, required this.room});
+  const RoomChatScreen({
+    super.key,
+    required this.room,
+  });
 
   @override
   State<RoomChatScreen> createState() => _RoomChatScreenState();
@@ -378,7 +385,10 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     );
   }
 
-  void addSystemMessage(String text, {Color color = Colors.red}) {
+  void addSystemMessage(
+    String text, {
+    Color color = Colors.red,
+  }) {
     setState(() {
       messages.add(
         RoomChatMessageModel(
@@ -414,7 +424,104 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     );
   }
 
-  RoomChatUserModel copyUserWithRole(RoomChatUserModel user, RoomRole role) {
+void openUserProfile(RoomChatUserModel user) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => UserProfileScreen(
+        user: UserProfileModel(
+          id: user.id == 'me' ? '579915277' : user.id,
+          name: user.name,
+          username: '@${user.name.toLowerCase()}',
+          avatarText: user.avatarText,
+          avatarUrl: user.avatarUrl,
+          coverUrl:
+              'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',
+          role: user.role.label,
+          status: user.isOnline ? 'Online now' : 'Offline',
+          bio:
+              'فقدت حماسي في كل شيء رغباتي كلها تهجرني حتى أني لا أرى أحلامًا ذات شأن لا أرى سوى أحلام عادية.',
+          badge: user.badge,
+          frame: user.frame,
+          nameColor: user.nameColor,
+          isOnline: user.isOnline,
+          receivedGifts: 0,
+          sentGifts: 0,
+          views: 363,
+          friends: 1,
+          since: '2026-6-2',
+          country: 'N/A',
+          gender: 'N/A',
+          age: 'N/A',
+        ),
+      ),
+    ),
+  );
+}
+  void showAvatarActions(RoomChatUserModel user) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(R.size(context, 24)),
+        ),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: R.size(context, 10),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: R.size(context, 46),
+                  height: R.size(context, 5),
+                  margin: EdgeInsets.only(
+                    bottom: R.size(context, 10),
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+
+                ListTile(
+                  leading: const Icon(Icons.copy_rounded),
+                  title: const Text('Copy name'),
+                  onTap: () async {
+                    Navigator.pop(context);
+
+                    await Clipboard.setData(
+                      ClipboardData(text: user.name),
+                    );
+
+                    showMessage('${user.name} copied');
+                  },
+                ),
+
+                ListTile(
+                  leading: const Icon(Icons.card_giftcard_rounded),
+                  title: const Text('Send Gift'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    handleUserAction(user, RoomUserAction.sendGift);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  RoomChatUserModel copyUserWithRole(
+    RoomChatUserModel user,
+    RoomRole role,
+  ) {
     return RoomChatUserModel(
       id: user.id,
       name: user.name,
@@ -429,7 +536,10 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     );
   }
 
-  void updateUserRole(RoomChatUserModel user, RoomRole newRole) {
+  void updateUserRole(
+    RoomChatUserModel user,
+    RoomRole newRole,
+  ) {
     final index = users.indexWhere((item) => item.id == user.id);
 
     if (index == -1) return;
@@ -439,7 +549,10 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     });
   }
 
-  void handleUserAction(RoomChatUserModel user, RoomUserAction action) {
+  void handleUserAction(
+    RoomChatUserModel user,
+    RoomUserAction action,
+  ) {
     switch (action) {
       case RoomUserAction.message:
         openPrivateChat(user);
@@ -482,7 +595,14 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
         break;
 
       case RoomUserAction.copy:
-        addSystemMessage('${user.name} copied', color: Colors.grey);
+        Clipboard.setData(
+          ClipboardData(text: user.name),
+        );
+
+        addSystemMessage(
+          '${user.name} copied',
+          color: Colors.grey,
+        );
         break;
     }
   }
@@ -542,8 +662,12 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
             controller: controller,
             minLines: 3,
             maxLines: 6,
-            style: TextStyle(fontSize: R.sp(context, 19)),
-            decoration: const InputDecoration(border: UnderlineInputBorder()),
+            style: TextStyle(
+              fontSize: R.sp(context, 19),
+            ),
+            decoration: const InputDecoration(
+              border: UnderlineInputBorder(),
+            ),
           ),
           actions: [
             TextButton(
@@ -584,13 +708,19 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
             children: [
               TextField(
                 controller: controller,
-                style: TextStyle(fontSize: R.sp(context, 26)),
+                style: TextStyle(
+                  fontSize: R.sp(context, 26),
+                ),
                 decoration: InputDecoration(
                   hintText: 'Username',
-                  hintStyle: TextStyle(fontSize: R.sp(context, 26)),
+                  hintStyle: TextStyle(
+                    fontSize: R.sp(context, 26),
+                  ),
                 ),
               ),
+
               SizedBox(height: R.size(context, 22)),
+
               SizedBox(
                 width: R.size(context, 170),
                 height: R.size(context, 58),
@@ -604,7 +734,9 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                     backgroundColor: const Color(0xFF087887),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(R.size(context, 40)),
+                      borderRadius: BorderRadius.circular(
+                        R.size(context, 40),
+                      ),
                     ),
                   ),
                   child: Text(
@@ -680,9 +812,18 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
         0,
       ),
       items: const [
-        PopupMenuItem(value: 'public', child: Text('Public rooms')),
-        PopupMenuItem(value: 'voice', child: Text('Voice rooms')),
-        PopupMenuItem(value: 'active', child: Text('Active rooms')),
+        PopupMenuItem(
+          value: 'public',
+          child: Text('Public rooms'),
+        ),
+        PopupMenuItem(
+          value: 'voice',
+          child: Text('Voice rooms'),
+        ),
+        PopupMenuItem(
+          value: 'active',
+          child: Text('Active rooms'),
+        ),
       ],
     );
   }
@@ -698,7 +839,10 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
         0,
       ),
       items: [
-        const PopupMenuItem(value: RoomUserAction.copy, child: Text('Copy')),
+        const PopupMenuItem(
+          value: RoomUserAction.copy,
+          child: Text('Copy'),
+        ),
         const PopupMenuItem(
           value: RoomUserAction.message,
           child: Text('Message'),
@@ -708,8 +852,14 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
             value: RoomUserAction.sendGift,
             child: Text('Send Gift'),
           ),
-          const PopupMenuItem(value: RoomUserAction.kick, child: Text('Kick')),
-          const PopupMenuItem(value: RoomUserAction.ban, child: Text('Ban')),
+          const PopupMenuItem(
+            value: RoomUserAction.kick,
+            child: Text('Kick'),
+          ),
+          const PopupMenuItem(
+            value: RoomUserAction.ban,
+            child: Text('Ban'),
+          ),
           const PopupMenuItem(
             value: RoomUserAction.setMember,
             child: Text('Set Member'),
@@ -734,7 +884,10 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
 
   void showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -790,6 +943,12 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                       : () => playVoice(message.localPath!),
                   onNameLongPress: () {
                     showUserNameActions(message.sender);
+                  },
+                  onAvatarTap: () {
+                    openUserProfile(message.sender);
+                  },
+                  onAvatarLongPress: () {
+                    showAvatarActions(message.sender);
                   },
                 );
               },
