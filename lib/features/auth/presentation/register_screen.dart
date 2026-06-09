@@ -20,7 +20,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   String? usernameError;
   String? passwordError;
-
+bool submittedRegister = false;
   @override
   void dispose() {
     usernameController.dispose();
@@ -59,17 +59,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return isValid;
   }
 
-  void register() {
-    if (!validate()) return;
+void register() {
+  if (!validate()) return;
 
-    ref
-        .read(authProvider.notifier)
-        .register(
-          username: usernameController.text.trim(),
-          password: passwordController.text.trim(),
-        );
-  }
+  submittedRegister = true;
 
+  ref.read(authProvider.notifier).register(
+        username: usernameController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+}
   void openLogin() {
     Navigator.pushReplacement(
       context,
@@ -129,31 +128,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
 
-    ref.listen(authProvider, (previous, next) {
-      if (next.loggedIn) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
+ref.listen(authProvider, (previous, next) {
+  final wasLoggedIn = previous?.loggedIn == true;
+  final becameLoggedIn = !wasLoggedIn && next.loggedIn == true;
 
-      if (next.error != null && next.error!.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Theme.of(context).colorScheme.inverseSurface,
-            content: Text(
-              next.error!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onInverseSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+  if (submittedRegister && becameLoggedIn) {
+    submittedRegister = false;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
+  }
+
+  if (next.error != null && next.error!.isNotEmpty) {
+    submittedRegister = false;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.inverseSurface,
+        content: Text(
+          next.error!,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onInverseSurface,
+            fontWeight: FontWeight.w600,
           ),
-        );
-      }
-    });
-
+        ),
+      ),
+    );
+  }
+});
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 

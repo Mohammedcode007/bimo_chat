@@ -19,7 +19,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String? usernameError;
   String? passwordError;
-
+bool submittedLogin = false;
   @override
   void dispose() {
     usernameController.dispose();
@@ -55,17 +55,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return ok;
   }
 
-  void login() {
-    if (!validate()) return;
+void login() {
+  if (!validate()) return;
 
-    ref
-        .read(authProvider.notifier)
-        .login(
-          username: usernameController.text.trim(),
-          password: passwordController.text.trim(),
-        );
-  }
+  submittedLogin = true;
 
+  ref.read(authProvider.notifier).login(
+        username: usernameController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+}
   void openRegister() {
     Navigator.push(
       context,
@@ -95,24 +94,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
 
-    ref.listen(authProvider, (previous, next) {
-      if (next.loggedIn) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
+ref.listen(authProvider, (previous, next) {
+  final wasLoggedIn = previous?.loggedIn == true;
+  final becameLoggedIn = !wasLoggedIn && next.loggedIn == true;
 
-      if (next.error != null && next.error!.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
+  if (submittedLogin && becameLoggedIn) {
+    submittedLogin = false;
 
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
+  }
+
+  if (next.error != null && next.error!.isNotEmpty) {
+    submittedLogin = false;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(next.error!),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+});
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 

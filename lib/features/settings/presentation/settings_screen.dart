@@ -1,11 +1,13 @@
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/app/app_controller.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/image_picker_helper.dart';
 import '../../auth/logic/auth_provider.dart';
 import '../../auth/presentation/login_screen.dart';
 import 'widgets/profile_header.dart';
@@ -126,6 +128,54 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
   void logout() {
     ref.read(authProvider.notifier).logout();
+  }
+
+  Future<void> changeProfileImage(String imageType) async {
+    final base64 = await ImagePickerHelper.pickImageAsBase64(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: imageType == 'avatar' ? 800 : 1600,
+      maxHeight: imageType == 'avatar' ? 800 : 900,
+    );
+
+    if (base64 == null) return;
+
+    ref.read(authProvider.notifier).updateProfileImage(
+          imageType: imageType,
+          base64: base64,
+        );
+  }
+
+  Future<void> confirmDeleteAccount() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete account'),
+          content: const Text(
+            'Are you sure you want to delete your account? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.error,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    ref.read(authProvider.notifier).deleteAccount();
   }
 
   Future<void> editTextField({
@@ -276,23 +326,23 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
     final auth = ref.watch(authProvider);
     final user = auth.user ?? <String, dynamic>{};
 
-    ref.listen(authProvider, (previous, next) {
-      final wasLoggedIn = previous?.loggedIn == true;
-      final isLoggedOutNow = next.loggedIn == false;
+ref.listen(authProvider, (previous, next) {
+  final wasLoggedIn = previous?.loggedIn == true;
+  final isLoggedOutNow = next.loggedIn == false;
 
-      if (wasLoggedIn && isLoggedOutNow) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
-      }
+  if (wasLoggedIn && isLoggedOutNow) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+    return;
+  }
 
-      if (next.error != null && next.error!.isNotEmpty) {
-        showMessage(next.error!);
-      }
-    });
-
+  if (next.error != null && next.error!.isNotEmpty) {
+    showMessage(next.error!);
+  }
+});
     final app = AppController.of(context);
     final lang = AppLocalizations.of(context);
     final theme = Theme.of(context);
@@ -377,18 +427,10 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
               username: username,
               title: lang.t('settings'),
               onEditCover: () {
-                editTextField(
-                  title: lang.t('edit_cover'),
-                  initialValue: coverUrl == defaultCoverUrl ? '' : coverUrl,
-                  fieldKey: 'cover_url',
-                );
+                changeProfileImage('cover');
               },
               onEditAvatar: () {
-                editTextField(
-                  title: lang.t('edit_avatar'),
-                  initialValue: avatarUrl == defaultAvatarUrl ? '' : avatarUrl,
-                  fieldKey: 'photo_url',
-                );
+                changeProfileImage('avatar');
               },
             ),
 
@@ -403,8 +445,9 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
                   onTap: () {
                     editTextField(
                       title: lang.t('status_message'),
-                      initialValue:
-                          statusMessage == 'No status message' ? '' : statusMessage,
+                      initialValue: statusMessage == 'No status message'
+                          ? ''
+                          : statusMessage,
                       fieldKey: 'status_message',
                     );
                   },
@@ -569,8 +612,9 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
                 SettingTextTile(
                   title: lang.t('delete_my_account'),
-                  titleColor: colorScheme.onSurface,
-                  onTap: () => showMessage(lang.t('delete_my_account')),
+                  titleColor: AppTheme.error,
+                  trailingIcon: Icons.delete_forever_rounded,
+                  onTap: confirmDeleteAccount,
                 ),
               ],
             ),
