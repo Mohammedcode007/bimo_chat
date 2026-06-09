@@ -6,17 +6,15 @@ import '../data/user_profile_model.dart';
 class UserProfileScreen extends StatelessWidget {
   final UserProfileModel user;
 
-  const UserProfileScreen({
-    super.key,
-    required this.user,
-  });
+  const UserProfileScreen({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -32,7 +30,7 @@ class UserProfileScreen extends StatelessWidget {
             Divider(
               height: 1,
               thickness: 1,
-              color: Colors.black.withValues(alpha: 0.08),
+              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
             ),
 
             _StatsRow(user: user),
@@ -52,12 +50,12 @@ class UserProfileScreen extends StatelessWidget {
 class _ProfileTopName extends StatelessWidget {
   final UserProfileModel user;
 
-  const _ProfileTopName({
-    required this.user,
-  });
+  const _ProfileTopName({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       height: R.size(context, 122),
       alignment: Alignment.center,
@@ -69,9 +67,9 @@ class _ProfileTopName extends StatelessWidget {
         textAlign: TextAlign.center,
         textDirection: TextDirection.rtl,
         style: TextStyle(
-          color: user.nameColor ?? const Color(0xFF202124),
+          color: user.nameColor ?? colorScheme.onSurface,
           fontSize: R.sp(context, 24),
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           height: 1.1,
         ),
       ),
@@ -82,9 +80,7 @@ class _ProfileTopName extends StatelessWidget {
 class _CoverAvatarSection extends StatelessWidget {
   final UserProfileModel user;
 
-  const _CoverAvatarSection({
-    required this.user,
-  });
+  const _CoverAvatarSection({required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -99,10 +95,7 @@ class _CoverAvatarSection extends StatelessWidget {
             child: _CoverImage(user: user),
           ),
 
-          Positioned(
-            bottom: R.size(context, 0),
-            child: _Avatar(user: user),
-          ),
+          Positioned(bottom: 0, child: _Avatar(user: user)),
         ],
       ),
     );
@@ -112,16 +105,14 @@ class _CoverAvatarSection extends StatelessWidget {
 class _CoverImage extends StatelessWidget {
   final UserProfileModel user;
 
-  const _CoverImage({
-    required this.user,
-  });
+  const _CoverImage({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (user.coverUrl.trim().isEmpty) {
-      return Container(
-        color: const Color(0xFFF7F8FA),
-      );
+      return Container(color: colorScheme.surfaceContainerHighest);
     }
 
     return Image.network(
@@ -129,9 +120,7 @@ class _CoverImage extends StatelessWidget {
       width: double.infinity,
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) {
-        return Container(
-          color: const Color(0xFFF7F8FA),
-        );
+        return Container(color: colorScheme.surfaceContainerHighest);
       },
     );
   }
@@ -140,23 +129,22 @@ class _CoverImage extends StatelessWidget {
 class _Avatar extends StatelessWidget {
   final UserProfileModel user;
 
-  const _Avatar({
-    required this.user,
-  });
+  const _Avatar({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final pageBackground = theme.scaffoldBackgroundColor;
+
     return Container(
       width: R.size(context, 150),
       height: R.size(context, 150),
       padding: EdgeInsets.all(R.size(context, 4)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
+        color: pageBackground,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: const Color(0xFFF7F8FA),
-          width: R.size(context, 4),
-        ),
+        border: Border.all(color: pageBackground, width: R.size(context, 4)),
       ),
       child: Container(
         padding: EdgeInsets.all(user.frame != null ? R.size(context, 3) : 0),
@@ -166,7 +154,7 @@ class _Avatar extends StatelessWidget {
               ? Border.all(
                   color: user.frame == 'gold'
                       ? const Color(0xFFFFC107)
-                      : Colors.red,
+                      : colorScheme.error,
                   width: R.size(context, 3),
                 )
               : null,
@@ -190,19 +178,19 @@ class _Avatar extends StatelessWidget {
 class _AvatarText extends StatelessWidget {
   final UserProfileModel user;
 
-  const _AvatarText({
-    required this.user,
-  });
+  const _AvatarText({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      color: const Color(0xFF0C3A3F),
+      color: colorScheme.primary,
       alignment: Alignment.center,
       child: Text(
         user.avatarText,
         style: TextStyle(
-          color: Colors.white,
+          color: colorScheme.onPrimary,
           fontSize: R.sp(context, 42),
           fontWeight: FontWeight.w900,
         ),
@@ -214,19 +202,19 @@ class _AvatarText extends StatelessWidget {
 class _UserIdText extends StatelessWidget {
   final UserProfileModel user;
 
-  const _UserIdText({
-    required this.user,
-  });
+  const _UserIdText({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: EdgeInsets.only(top: R.size(context, 10)),
       child: Center(
         child: Text(
           'ID: ${user.id}',
           style: TextStyle(
-            color: const Color(0xFF4A4D55),
+            color: colorScheme.onSurfaceVariant,
             fontSize: R.sp(context, 22),
             fontWeight: FontWeight.w700,
           ),
@@ -239,9 +227,7 @@ class _UserIdText extends StatelessWidget {
 class _StatsRow extends StatelessWidget {
   final UserProfileModel user;
 
-  const _StatsRow({
-    required this.user,
-  });
+  const _StatsRow({required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -264,16 +250,10 @@ class _StatsRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: _StatItem(
-              value: '${user.views}',
-              label: 'Views',
-            ),
+            child: _StatItem(value: '${user.views}', label: 'Views'),
           ),
           Expanded(
-            child: _StatItem(
-              value: '${user.friends}',
-              label: 'Friends',
-            ),
+            child: _StatItem(value: '${user.friends}', label: 'Friends'),
           ),
         ],
       ),
@@ -284,9 +264,7 @@ class _StatsRow extends StatelessWidget {
 class _InfoRow extends StatelessWidget {
   final UserProfileModel user;
 
-  const _InfoRow({
-    required this.user,
-  });
+  const _InfoRow({required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -298,28 +276,16 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _InfoItem(
-              value: user.since,
-              label: 'Since',
-            ),
+            child: _InfoItem(value: user.since, label: 'Since'),
           ),
           Expanded(
-            child: _InfoItem(
-              value: user.country,
-              label: 'Country',
-            ),
+            child: _InfoItem(value: user.country, label: 'Country'),
           ),
           Expanded(
-            child: _InfoItem(
-              value: user.gender,
-              label: 'Gender',
-            ),
+            child: _InfoItem(value: user.gender, label: 'Gender'),
           ),
           Expanded(
-            child: _InfoItem(
-              value: user.age,
-              label: 'Age',
-            ),
+            child: _InfoItem(value: user.age, label: 'Age'),
           ),
         ],
       ),
@@ -332,14 +298,12 @@ class _StatItem extends StatelessWidget {
   final String label;
   final IconData? icon;
 
-  const _StatItem({
-    required this.value,
-    required this.label,
-    this.icon,
-  });
+  const _StatItem({required this.value, required this.label, this.icon});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       children: [
         Text(
@@ -347,28 +311,31 @@ class _StatItem extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: const Color(0xFF6B8790),
+            color: colorScheme.onSurfaceVariant,
             fontSize: R.sp(context, 22),
             fontWeight: FontWeight.w500,
           ),
         ),
+
         SizedBox(height: R.size(context, 3)),
+
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               label,
               style: TextStyle(
-                color: const Color(0xFF444850),
+                color: colorScheme.onSurface,
                 fontSize: R.sp(context, 20),
                 fontWeight: FontWeight.w500,
               ),
             ),
+
             if (icon != null) ...[
               SizedBox(width: R.size(context, 3)),
               Icon(
                 icon,
-                color: const Color(0xFF444850),
+                color: colorScheme.onSurface,
                 size: R.size(context, 25),
               ),
             ],
@@ -383,13 +350,12 @@ class _InfoItem extends StatelessWidget {
   final String value;
   final String label;
 
-  const _InfoItem({
-    required this.value,
-    required this.label,
-  });
+  const _InfoItem({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       children: [
         Text(
@@ -397,16 +363,18 @@ class _InfoItem extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: const Color(0xFF6B8790),
+            color: colorScheme.onSurfaceVariant,
             fontSize: R.sp(context, 20),
             fontWeight: FontWeight.w500,
           ),
         ),
+
         SizedBox(height: R.size(context, 4)),
+
         Text(
           label,
           style: TextStyle(
-            color: const Color(0xFF444850),
+            color: colorScheme.onSurface,
             fontSize: R.sp(context, 20),
             fontWeight: FontWeight.w500,
           ),
@@ -419,19 +387,19 @@ class _InfoItem extends StatelessWidget {
 class _BioBox extends StatelessWidget {
   final UserProfileModel user;
 
-  const _BioBox({
-    required this.user,
-  });
+  const _BioBox({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final text = user.bio.trim().isEmpty
         ? 'فقدت حماسي في كل شيء رغباتي كلها تهجرني حتى أني لا أرى أحلامًا ذات شأن لا أرى سوى أحلام عادية.'
         : user.bio;
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFE9EEF1),
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
       padding: EdgeInsets.symmetric(
         horizontal: R.size(context, 24),
         vertical: R.size(context, 12),
@@ -441,7 +409,7 @@ class _BioBox extends StatelessWidget {
         textAlign: TextAlign.center,
         textDirection: TextDirection.rtl,
         style: TextStyle(
-          color: const Color(0xFF3E4248),
+          color: colorScheme.onSurface,
           fontSize: R.sp(context, 20),
           fontWeight: FontWeight.w400,
           height: 1.55,

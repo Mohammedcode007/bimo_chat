@@ -9,7 +9,7 @@ class RoomUsersDialog extends StatelessWidget {
   final List<RoomChatUserModel> users;
   final RoomRole myRole;
   final void Function(RoomChatUserModel user, RoomUserAction action)
-      onUserAction;
+  onUserAction;
   final void Function(RoomChatUserModel user) onMessageTap;
 
   const RoomUsersDialog({
@@ -22,12 +22,17 @@ class RoomUsersDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
         horizontal: R.size(context, 38),
         vertical: R.size(context, 34),
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(R.size(context, 18)),
+      ),
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.82,
         child: Column(
@@ -44,6 +49,7 @@ class RoomUsersDialog extends StatelessWidget {
                 child: Text(
                   'Users',
                   style: TextStyle(
+                    color: colorScheme.onSurface,
                     fontSize: R.sp(context, 34),
                     fontWeight: FontWeight.w500,
                   ),
@@ -94,7 +100,9 @@ class _UserTile extends StatelessWidget {
     required this.onAction,
   });
 
-  Color get roleColor {
+  Color roleColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     switch (user.role) {
       case RoomRole.owner:
         return const Color(0xFFC04A28);
@@ -103,22 +111,23 @@ class _UserTile extends StatelessWidget {
         return const Color(0xFF4A90E2);
 
       case RoomRole.banned:
-        return Colors.red;
+        return colorScheme.error;
 
       case RoomRole.none:
-        return Colors.black;
+        return colorScheme.onSurface;
 
       case RoomRole.member:
-        return Colors.black;
+        return colorScheme.onSurface;
     }
   }
 
   Future<void> openActions(BuildContext context) async {
+    final colorScheme = Theme.of(context).colorScheme;
     final actions = allowedRoomUserActions(myRole);
 
     final action = await showMenu<RoomUserAction>(
       context: context,
-      color: const Color(0xFFF4EDF8),
+      color: colorScheme.surface,
       position: RelativeRect.fromLTRB(
         R.size(context, 120),
         R.size(context, 160),
@@ -132,27 +141,29 @@ class _UserTile extends StatelessWidget {
           child: Text(
             user.name,
             style: TextStyle(
+              color: colorScheme.onSurface,
               fontSize: R.sp(context, 18),
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
 
-        ...actions.map(
-          (action) {
-            return PopupMenuItem(
-              value: action,
-              height: R.size(context, 58),
-              child: Text(
-                action.label,
-                style: TextStyle(
-                  fontSize: R.sp(context, 22),
-                  fontWeight: FontWeight.w400,
-                ),
+        ...actions.map((action) {
+          return PopupMenuItem(
+            value: action,
+            height: R.size(context, 58),
+            child: Text(
+              action.label,
+              style: TextStyle(
+                color: action == RoomUserAction.ban
+                    ? colorScheme.error
+                    : colorScheme.onSurface,
+                fontSize: R.sp(context, 22),
+                fontWeight: FontWeight.w400,
               ),
-            );
-          },
-        ),
+            ),
+          );
+        }),
       ],
     );
 
@@ -163,6 +174,8 @@ class _UserTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return InkWell(
       onTap: () => openActions(context),
       onLongPress: () => openActions(context),
@@ -175,11 +188,11 @@ class _UserTile extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: R.size(context, 31),
-              backgroundColor: Colors.grey.shade300,
+              backgroundColor: colorScheme.surfaceContainerHighest,
               child: Text(
                 user.avatarText,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: colorScheme.onSurface,
                   fontSize: R.sp(context, 18),
                   fontWeight: FontWeight.w800,
                 ),
@@ -194,7 +207,7 @@ class _UserTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Colors.grey.withValues(alpha: 0.25),
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.35),
                     ),
                   ),
                 ),
@@ -210,7 +223,7 @@ class _UserTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: user.nameColor ?? roleColor,
+                              color: user.nameColor ?? roleColor(context),
                               fontSize: R.sp(context, 22),
                               fontWeight: FontWeight.w500,
                             ),
@@ -221,7 +234,7 @@ class _UserTile extends StatelessWidget {
                           Text(
                             user.role.label,
                             style: TextStyle(
-                              color: Colors.black.withValues(alpha: 0.65),
+                              color: colorScheme.onSurfaceVariant,
                               fontSize: R.sp(context, 15),
                               fontStyle: FontStyle.italic,
                               fontWeight: FontWeight.w500,
@@ -236,7 +249,7 @@ class _UserTile extends StatelessWidget {
                       icon: Icon(
                         Icons.card_giftcard_rounded,
                         size: R.size(context, 31),
-                        color: Colors.black.withValues(alpha: 0.72),
+                        color: colorScheme.onSurface.withValues(alpha: 0.72),
                       ),
                     ),
 
@@ -245,7 +258,7 @@ class _UserTile extends StatelessWidget {
                       icon: Icon(
                         Icons.message_rounded,
                         size: R.size(context, 31),
-                        color: Colors.black.withValues(alpha: 0.72),
+                        color: colorScheme.onSurface.withValues(alpha: 0.72),
                       ),
                     ),
                   ],

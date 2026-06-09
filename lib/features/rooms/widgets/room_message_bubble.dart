@@ -29,9 +29,20 @@ class RoomMessageBubble extends StatelessWidget {
       return _SystemMessageBubble(message: message);
     }
 
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final isMe = message.isMe;
-    final colorScheme = Theme.of(context).colorScheme;
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.72;
+
+    final bubbleColor = isDark
+        ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.82)
+        : Colors.white;
+
+    final bubbleBorderColor = isDark
+        ? colorScheme.outlineVariant.withValues(alpha: 0.35)
+        : Colors.transparent;
 
     return Padding(
       padding: EdgeInsetsDirectional.fromSTEB(
@@ -42,8 +53,9 @@ class RoomMessageBubble extends StatelessWidget {
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isMe) ...[
             _AvatarSide(
@@ -69,7 +81,20 @@ class RoomMessageBubble extends StatelessWidget {
                     R.size(context, 12),
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: bubbleColor,
+                    border: Border.all(
+                      color: bubbleBorderColor,
+                      width: isDark ? 0.8 : 0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.16 : 0.04,
+                        ),
+                        blurRadius: isDark ? 6 : 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                     borderRadius: BorderRadiusDirectional.only(
                       topStart: Radius.circular(
                         isMe ? R.size(context, 18) : R.size(context, 4),
@@ -102,7 +127,9 @@ class RoomMessageBubble extends StatelessWidget {
                       Container(
                         width: double.infinity,
                         height: R.size(context, 1),
-                        color: colorScheme.onSurface.withValues(alpha: 0.13),
+                        color: colorScheme.onSurface.withValues(
+                          alpha: isDark ? 0.18 : 0.13,
+                        ),
                       ),
 
                       SizedBox(height: R.size(context, 8)),
@@ -151,20 +178,20 @@ class _SenderNameInside extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fallbackNameColor = colorScheme.onSurface.withValues(alpha: 0.92);
+
     return GestureDetector(
       onLongPress: onLongPress,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment:
-            alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: alignEnd
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (alignEnd && message.sender.badge != null) ...[
             Text(
               message.sender.badge!,
-              style: TextStyle(
-                fontSize: R.sp(context, 15),
-                height: 1,
-              ),
+              style: TextStyle(fontSize: R.sp(context, 15), height: 1),
             ),
             SizedBox(width: R.size(context, 5)),
           ],
@@ -176,8 +203,7 @@ class _SenderNameInside extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: alignEnd ? TextAlign.end : TextAlign.start,
               style: TextStyle(
-                color: message.sender.nameColor ??
-                    colorScheme.onSurface.withValues(alpha: 0.82),
+                color: message.sender.nameColor ?? fallbackNameColor,
                 fontSize: R.sp(context, 18),
                 fontWeight: FontWeight.w900,
                 height: 1.1,
@@ -189,10 +215,7 @@ class _SenderNameInside extends StatelessWidget {
             SizedBox(width: R.size(context, 5)),
             Text(
               message.sender.badge!,
-              style: TextStyle(
-                fontSize: R.sp(context, 15),
-                height: 1,
-              ),
+              style: TextStyle(fontSize: R.sp(context, 15), height: 1),
             ),
           ],
         ],
@@ -240,8 +263,9 @@ class _MessageContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(R.size(context, 18)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment:
-              alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: alignEnd
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           children: [
             Icon(
               Icons.play_circle_fill_rounded,
@@ -257,7 +281,7 @@ class _MessageContent extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: colorScheme.onSurface.withValues(alpha: 0.82),
+                  color: colorScheme.onSurface.withValues(alpha: 0.92),
                   fontSize: R.sp(context, 18),
                   fontWeight: FontWeight.w700,
                 ),
@@ -284,7 +308,7 @@ class _MessageContent extends StatelessWidget {
       textAlign: alignEnd ? TextAlign.end : TextAlign.start,
       softWrap: true,
       style: TextStyle(
-        color: colorScheme.onSurface.withValues(alpha: 0.8),
+        color: colorScheme.onSurface.withValues(alpha: 0.90),
         fontSize: R.sp(context, 22),
         height: 1.35,
         fontWeight: FontWeight.w500,
@@ -343,36 +367,32 @@ class _AvatarSide extends StatelessWidget {
 class _AvatarWithFrame extends StatelessWidget {
   final RoomChatMessageModel message;
 
-  const _AvatarWithFrame({
-    required this.message,
-  });
+  const _AvatarWithFrame({required this.message});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final hasFrame = message.sender.frame != null;
 
+    final frameColor = message.sender.frame == 'gold'
+        ? const Color(0xFFFFC107)
+        : colorScheme.error;
+
     return Container(
-      padding: EdgeInsets.all(
-        hasFrame ? R.size(context, 3) : 0,
-      ),
+      padding: EdgeInsets.all(hasFrame ? R.size(context, 3) : 0),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: hasFrame
-            ? Border.all(
-                color: message.sender.frame == 'gold'
-                    ? const Color(0xFFFFC107)
-                    : Colors.red,
-                width: R.size(context, 2),
-              )
+            ? Border.all(color: frameColor, width: R.size(context, 2))
             : null,
       ),
       child: CircleAvatar(
         radius: R.size(context, 31),
-        backgroundColor: const Color(0xFF0C3A3F),
+        backgroundColor: colorScheme.primary.withValues(alpha: 0.95),
         child: Text(
           message.sender.avatarText,
           style: TextStyle(
-            color: Colors.white,
+            color: colorScheme.onPrimary,
             fontSize: R.sp(context, 18),
             fontWeight: FontWeight.w800,
           ),
@@ -385,13 +405,12 @@ class _AvatarWithFrame extends StatelessWidget {
 class _SystemMessageBubble extends StatelessWidget {
   final RoomChatMessageModel message;
 
-  const _SystemMessageBubble({
-    required this.message,
-  });
+  const _SystemMessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    final color = message.systemColor ?? Colors.red;
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = message.systemColor ?? colorScheme.error;
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -405,11 +424,9 @@ class _SystemMessageBubble extends StatelessWidget {
             vertical: R.size(context, 8),
           ),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.10),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(R.size(context, 999)),
-            border: Border.all(
-              color: color.withValues(alpha: 0.22),
-            ),
+            border: Border.all(color: color.withValues(alpha: 0.30)),
           ),
           child: Text(
             message.text,

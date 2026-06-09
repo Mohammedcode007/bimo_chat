@@ -1,3 +1,4 @@
+import 'package:bimo_chat/features/feed/presentation/feed_screen.dart';
 import 'package:flutter/material.dart';
 
 import '../../chats/presentation/chats_screen.dart';
@@ -16,7 +17,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int currentIndex = 0;
 
   final List<Widget> screens = const [
-    _HomeTab(),
+    FeedScreen(),
     RoomsScreen(),
     ChatsScreen(),
     FriendsScreen(),

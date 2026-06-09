@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/utils/responsive.dart';
 
 class RoomSettingsScreen extends StatelessWidget {
@@ -8,8 +9,11 @@ class RoomSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -23,12 +27,18 @@ class RoomSettingsScreen extends StatelessWidget {
               ),
               child: Text(
                 roomName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.rtl,
                 style: TextStyle(
+                  color: colorScheme.onSurface,
                   fontSize: R.sp(context, 31),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
+                  height: 1.15,
                 ),
               ),
             ),
+
             const _SettingsSwitchTile(title: 'Members Only'),
             const _SettingsTextTile(title: 'Password'),
             const _SettingsTextTile(title: 'Owners', subtitle: '185'),
@@ -40,11 +50,13 @@ class RoomSettingsScreen extends StatelessWidget {
               title: 'Reset banned IP',
               subtitle:
                   'Remove all banned IP now. (Every banned IP will be unbanned automatically after 24 hours) - currently ip banned: 51',
+              isDanger: true,
             ),
             const _SettingsTextTile(
               title: 'Reset Room',
               subtitle:
                   'Reset room state removing all roles except the Creator of this room. Also this action remove all banned users and IP',
+              isDanger: true,
             ),
           ],
         ),
@@ -67,6 +79,8 @@ class _SettingsSwitchTileState extends State<_SettingsSwitchTile> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: EdgeInsetsDirectional.fromSTEB(
         R.size(context, 18),
@@ -75,8 +89,12 @@ class _SettingsSwitchTileState extends State<_SettingsSwitchTile> {
         R.size(context, 15),
       ),
       decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
         border: Border(
-          top: BorderSide(color: Colors.grey.withValues(alpha: 0.25)),
+          top: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+            width: 0.8,
+          ),
         ),
       ),
       child: Row(
@@ -85,6 +103,7 @@ class _SettingsSwitchTileState extends State<_SettingsSwitchTile> {
             child: Text(
               widget.title,
               style: TextStyle(
+                color: colorScheme.onSurface,
                 fontSize: R.sp(context, 25),
                 fontWeight: FontWeight.w500,
               ),
@@ -92,6 +111,12 @@ class _SettingsSwitchTileState extends State<_SettingsSwitchTile> {
           ),
           Switch(
             value: value,
+            activeColor: const Color(0xFF087887),
+            activeTrackColor: const Color(0xFF087887).withValues(alpha: 0.35),
+            inactiveThumbColor: colorScheme.onSurfaceVariant,
+            inactiveTrackColor: colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.75,
+            ),
             onChanged: (newValue) {
               setState(() => value = newValue);
             },
@@ -105,46 +130,67 @@ class _SettingsSwitchTileState extends State<_SettingsSwitchTile> {
 class _SettingsTextTile extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final bool isDanger;
 
-  const _SettingsTextTile({required this.title, this.subtitle});
+  const _SettingsTextTile({
+    required this.title,
+    this.subtitle,
+    this.isDanger = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        R.size(context, 18),
-        R.size(context, 13),
-        R.size(context, 18),
-        R.size(context, 13),
-      ),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey.withValues(alpha: 0.25)),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final titleColor = isDanger ? colorScheme.error : colorScheme.onSurface;
+    final subtitleColor = isDanger
+        ? colorScheme.error.withValues(alpha: 0.78)
+        : colorScheme.onSurfaceVariant;
+
+    return InkWell(
+      onTap: () {},
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsetsDirectional.fromSTEB(
+          R.size(context, 18),
+          R.size(context, 13),
+          R.size(context, 18),
+          R.size(context, 13),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: R.sp(context, 25),
-              fontWeight: FontWeight.w500,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          border: Border(
+            top: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+              width: 0.8,
             ),
           ),
-          if (subtitle != null) ...[
-            SizedBox(height: R.size(context, 2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              subtitle!,
+              title,
               style: TextStyle(
-                fontSize: R.sp(context, 21),
-                height: 1.18,
-                color: Colors.black.withValues(alpha: 0.72),
-                fontWeight: FontWeight.w400,
+                color: titleColor,
+                fontSize: R.sp(context, 25),
+                fontWeight: FontWeight.w500,
               ),
             ),
+            if (subtitle != null) ...[
+              SizedBox(height: R.size(context, 4)),
+              Text(
+                subtitle!,
+                style: TextStyle(
+                  color: subtitleColor,
+                  fontSize: R.sp(context, 21),
+                  height: 1.18,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

@@ -20,6 +20,7 @@ import '../data/room_role.dart';
 import '../data/room_chat_user_model.dart';
 import '../data/room_chat_message_model.dart';
 
+import '../widgets/active_rooms_drawer.dart';
 import '../widgets/room_chat_header.dart';
 import '../widgets/room_input_bar.dart';
 import '../widgets/room_message_bubble.dart';
@@ -34,10 +35,7 @@ import 'room_settings_screen.dart';
 class RoomChatScreen extends StatefulWidget {
   final RoomModel room;
 
-  const RoomChatScreen({
-    super.key,
-    required this.room,
-  });
+  const RoomChatScreen({super.key, required this.room});
 
   @override
   State<RoomChatScreen> createState() => _RoomChatScreenState();
@@ -65,8 +63,8 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
       '<br><br><h6><font color="#000000">اللهم صل وسلم على نبينا محمد ﷺ</font></h6>';
 
   late List<RoomChatUserModel> users;
-
   late List<RoomChatMessageModel> messages;
+  late List<RoomModel> activeRooms;
 
   @override
   void initState() {
@@ -135,6 +133,18 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
       ),
     ];
 
+    activeRooms = [
+      widget.room,
+      const RoomModel(
+        id: 'active_2',
+        name: 'ديوان✧الملوك',
+        membersCount: 22,
+        rank: 2,
+        isActive: true,
+        avatarColor: Color(0xFF607D80),
+      ),
+    ];
+
     messages = [
       RoomChatMessageModel(
         id: '1',
@@ -171,6 +181,16 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     recorder.dispose();
     audioPlayer.dispose();
     super.dispose();
+  }
+
+  Color get chatBackgroundColor {
+    final theme = Theme.of(context);
+
+    if (theme.brightness == Brightness.dark) {
+      return theme.colorScheme.surface;
+    }
+
+    return const Color(0xFFEAF0F2);
   }
 
   void scrollToBottom({bool jump = false}) {
@@ -385,10 +405,9 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     );
   }
 
-  void addSystemMessage(
-    String text, {
-    Color color = Colors.red,
-  }) {
+  void addSystemMessage(String text, {Color? color}) {
+    final fallbackColor = Theme.of(context).colorScheme.error;
+
     setState(() {
       messages.add(
         RoomChatMessageModel(
@@ -397,7 +416,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
           text: text,
           type: RoomChatMessageType.system,
           createdAt: DateTime.now(),
-          systemColor: color,
+          systemColor: color ?? fallbackColor,
         ),
       );
     });
@@ -424,44 +443,47 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     );
   }
 
-void openUserProfile(RoomChatUserModel user) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => UserProfileScreen(
-        user: UserProfileModel(
-          id: user.id == 'me' ? '579915277' : user.id,
-          name: user.name,
-          username: '@${user.name.toLowerCase()}',
-          avatarText: user.avatarText,
-          avatarUrl: user.avatarUrl,
-          coverUrl:
-              'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',
-          role: user.role.label,
-          status: user.isOnline ? 'Online now' : 'Offline',
-          bio:
-              'فقدت حماسي في كل شيء رغباتي كلها تهجرني حتى أني لا أرى أحلامًا ذات شأن لا أرى سوى أحلام عادية.',
-          badge: user.badge,
-          frame: user.frame,
-          nameColor: user.nameColor,
-          isOnline: user.isOnline,
-          receivedGifts: 0,
-          sentGifts: 0,
-          views: 363,
-          friends: 1,
-          since: '2026-6-2',
-          country: 'N/A',
-          gender: 'N/A',
-          age: 'N/A',
+  void openUserProfile(RoomChatUserModel user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => UserProfileScreen(
+          user: UserProfileModel(
+            id: user.id == 'me' ? '579915277' : user.id,
+            name: user.name,
+            username: '@${user.name.toLowerCase()}',
+            avatarText: user.avatarText,
+            avatarUrl: user.avatarUrl,
+            coverUrl:
+                'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',
+            role: user.role.label,
+            status: user.isOnline ? 'Online now' : 'Offline',
+            bio:
+                'فقدت حماسي في كل شيء رغباتي كلها تهجرني حتى أني لا أرى أحلامًا ذات شأن لا أرى سوى أحلام عادية.',
+            badge: user.badge,
+            frame: user.frame,
+            nameColor: user.nameColor,
+            isOnline: user.isOnline,
+            receivedGifts: 0,
+            sentGifts: 0,
+            views: 363,
+            friends: 1,
+            since: '2026-6-2',
+            country: 'N/A',
+            gender: 'N/A',
+            age: 'N/A',
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   void showAvatarActions(RoomChatUserModel user) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(R.size(context, 24)),
@@ -470,41 +492,53 @@ void openUserProfile(RoomChatUserModel user) {
       builder: (_) {
         return SafeArea(
           child: Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: R.size(context, 10),
-            ),
+            padding: EdgeInsets.symmetric(vertical: R.size(context, 10)),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: R.size(context, 46),
                   height: R.size(context, 5),
-                  margin: EdgeInsets.only(
-                    bottom: R.size(context, 10),
-                  ),
+                  margin: EdgeInsets.only(bottom: R.size(context, 10)),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: colorScheme.onSurface.withValues(alpha: 0.28),
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
 
                 ListTile(
-                  leading: const Icon(Icons.copy_rounded),
-                  title: const Text('Copy name'),
+                  leading: Icon(
+                    Icons.copy_rounded,
+                    color: colorScheme.onSurface,
+                  ),
+                  title: Text(
+                    'Copy name',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   onTap: () async {
                     Navigator.pop(context);
 
-                    await Clipboard.setData(
-                      ClipboardData(text: user.name),
-                    );
+                    await Clipboard.setData(ClipboardData(text: user.name));
 
                     showMessage('${user.name} copied');
                   },
                 ),
 
                 ListTile(
-                  leading: const Icon(Icons.card_giftcard_rounded),
-                  title: const Text('Send Gift'),
+                  leading: Icon(
+                    Icons.card_giftcard_rounded,
+                    color: colorScheme.onSurface,
+                  ),
+                  title: Text(
+                    'Send Gift',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     handleUserAction(user, RoomUserAction.sendGift);
@@ -518,10 +552,7 @@ void openUserProfile(RoomChatUserModel user) {
     );
   }
 
-  RoomChatUserModel copyUserWithRole(
-    RoomChatUserModel user,
-    RoomRole role,
-  ) {
+  RoomChatUserModel copyUserWithRole(RoomChatUserModel user, RoomRole role) {
     return RoomChatUserModel(
       id: user.id,
       name: user.name,
@@ -536,10 +567,7 @@ void openUserProfile(RoomChatUserModel user) {
     );
   }
 
-  void updateUserRole(
-    RoomChatUserModel user,
-    RoomRole newRole,
-  ) {
+  void updateUserRole(RoomChatUserModel user, RoomRole newRole) {
     final index = users.indexWhere((item) => item.id == user.id);
 
     if (index == -1) return;
@@ -549,10 +577,7 @@ void openUserProfile(RoomChatUserModel user) {
     });
   }
 
-  void handleUserAction(
-    RoomChatUserModel user,
-    RoomUserAction action,
-  ) {
+  void handleUserAction(RoomChatUserModel user, RoomUserAction action) {
     switch (action) {
       case RoomUserAction.message:
         openPrivateChat(user);
@@ -595,14 +620,8 @@ void openUserProfile(RoomChatUserModel user) {
         break;
 
       case RoomUserAction.copy:
-        Clipboard.setData(
-          ClipboardData(text: user.name),
-        );
-
-        addSystemMessage(
-          '${user.name} copied',
-          color: Colors.grey,
-        );
+        Clipboard.setData(ClipboardData(text: user.name));
+        addSystemMessage('${user.name} copied', color: Colors.grey);
         break;
     }
   }
@@ -646,14 +665,17 @@ void openUserProfile(RoomChatUserModel user) {
 
   void showWelcomeMessageDialog() {
     final controller = TextEditingController(text: pinnedHtml);
+    final colorScheme = Theme.of(context).colorScheme;
 
     showDialog(
       context: context,
       builder: (_) {
         return AlertDialog(
+          backgroundColor: colorScheme.surface,
           title: Text(
             'Welcome message',
             style: TextStyle(
+              color: colorScheme.onSurface,
               fontSize: R.sp(context, 27),
               fontWeight: FontWeight.w600,
             ),
@@ -664,9 +686,15 @@ void openUserProfile(RoomChatUserModel user) {
             maxLines: 6,
             style: TextStyle(
               fontSize: R.sp(context, 19),
+              color: colorScheme.onSurface,
             ),
-            decoration: const InputDecoration(
-              border: UnderlineInputBorder(),
+            decoration: InputDecoration(
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: colorScheme.outlineVariant),
+              ),
+              focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFF087887), width: 1.4),
+              ),
             ),
           ),
           actions: [
@@ -692,11 +720,13 @@ void openUserProfile(RoomChatUserModel user) {
 
   void showInvitationDialog() {
     final controller = TextEditingController();
+    final colorScheme = Theme.of(context).colorScheme;
 
     showDialog(
       context: context,
       builder: (_) {
         return AlertDialog(
+          backgroundColor: colorScheme.surface,
           contentPadding: EdgeInsets.fromLTRB(
             R.size(context, 24),
             R.size(context, 18),
@@ -710,11 +740,22 @@ void openUserProfile(RoomChatUserModel user) {
                 controller: controller,
                 style: TextStyle(
                   fontSize: R.sp(context, 26),
+                  color: colorScheme.onSurface,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Username',
                   hintStyle: TextStyle(
                     fontSize: R.sp(context, 26),
+                    color: colorScheme.onSurface.withValues(alpha: 0.38),
+                  ),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: colorScheme.outlineVariant),
+                  ),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Color(0xFF087887),
+                      width: 1.4,
+                    ),
                   ),
                 ),
               ),
@@ -734,9 +775,7 @@ void openUserProfile(RoomChatUserModel user) {
                     backgroundColor: const Color(0xFF087887),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        R.size(context, 40),
-                      ),
+                      borderRadius: BorderRadius.circular(R.size(context, 40)),
                     ),
                   ),
                   child: Text(
@@ -756,12 +795,24 @@ void openUserProfile(RoomChatUserModel user) {
   }
 
   void showReportDialog() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showDialog(
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Report Violation'),
-          content: const Text('Do you want to report this room?'),
+          backgroundColor: colorScheme.surface,
+          title: Text(
+            'Report Violation',
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            'Do you want to report this room?',
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -802,36 +853,67 @@ void openUserProfile(RoomChatUserModel user) {
   }
 
   void openActiveRoomsMenu() {
-    showMenu<String>(
+    showGeneralDialog(
       context: context,
-      color: const Color(0xFFF4EDF8),
-      position: RelativeRect.fromLTRB(
-        R.size(context, 12),
-        R.size(context, 90),
-        R.size(context, 160),
-        0,
+      barrierDismissible: true,
+      barrierLabel: 'Active rooms',
+      barrierColor: Colors.black.withValues(
+        alpha: Theme.of(context).brightness == Brightness.dark ? 0.32 : 0.10,
       ),
-      items: const [
-        PopupMenuItem(
-          value: 'public',
-          child: Text('Public rooms'),
-        ),
-        PopupMenuItem(
-          value: 'voice',
-          child: Text('Voice rooms'),
-        ),
-        PopupMenuItem(
-          value: 'active',
-          child: Text('Active rooms'),
-        ),
-      ],
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return ActiveRoomsDrawer(
+          currentRoom: widget.room,
+          activeRooms: activeRooms,
+          onRoomTap: openActiveRoom,
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        );
+      },
+    );
+  }
+
+  void openActiveRoom(RoomModel room) {
+    if (room.id == widget.room.id) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => RoomChatScreen(room: room)),
+    );
+  }
+
+  PopupMenuItem<RoomUserAction> userMenuItem({
+    required RoomUserAction value,
+    required String title,
+    required Color textColor,
+  }) {
+    return PopupMenuItem(
+      value: value,
+      child: Text(
+        title,
+        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+      ),
     );
   }
 
   void showUserNameActions(RoomChatUserModel user) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showMenu<RoomUserAction>(
       context: context,
-      color: const Color(0xFFF4EDF8),
+      color: colorScheme.surface,
       position: RelativeRect.fromLTRB(
         R.size(context, 90),
         R.size(context, 180),
@@ -839,40 +921,48 @@ void openUserProfile(RoomChatUserModel user) {
         0,
       ),
       items: [
-        const PopupMenuItem(
+        userMenuItem(
           value: RoomUserAction.copy,
-          child: Text('Copy'),
+          title: 'Copy',
+          textColor: colorScheme.onSurface,
         ),
-        const PopupMenuItem(
+        userMenuItem(
           value: RoomUserAction.message,
-          child: Text('Message'),
+          title: 'Message',
+          textColor: colorScheme.onSurface,
         ),
         if (myRole == RoomRole.owner || myRole == RoomRole.admin) ...[
-          const PopupMenuItem(
+          userMenuItem(
             value: RoomUserAction.sendGift,
-            child: Text('Send Gift'),
+            title: 'Send Gift',
+            textColor: colorScheme.onSurface,
           ),
-          const PopupMenuItem(
+          userMenuItem(
             value: RoomUserAction.kick,
-            child: Text('Kick'),
+            title: 'Kick',
+            textColor: colorScheme.onSurface,
           ),
-          const PopupMenuItem(
+          userMenuItem(
             value: RoomUserAction.ban,
-            child: Text('Ban'),
+            title: 'Ban',
+            textColor: colorScheme.error,
           ),
-          const PopupMenuItem(
+          userMenuItem(
             value: RoomUserAction.setMember,
-            child: Text('Set Member'),
+            title: 'Set Member',
+            textColor: colorScheme.onSurface,
           ),
-          const PopupMenuItem(
+          userMenuItem(
             value: RoomUserAction.setAdmin,
-            child: Text('Set Admin'),
+            title: 'Set Admin',
+            textColor: colorScheme.onSurface,
           ),
         ],
         if (myRole == RoomRole.owner)
-          const PopupMenuItem(
+          userMenuItem(
             value: RoomUserAction.setOwner,
-            child: Text('Set Owner'),
+            title: 'Set Owner',
+            textColor: colorScheme.onSurface,
           ),
       ],
     ).then((action) {
@@ -883,18 +973,29 @@ void openUserProfile(RoomChatUserModel user) {
   }
 
   void showMessage(String text) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(text),
         behavior: SnackBarBehavior.floating,
+        backgroundColor: colorScheme.inverseSurface,
+        content: Text(
+          text,
+          style: TextStyle(
+            color: colorScheme.onInverseSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFEAF0F2),
+      backgroundColor: chatBackgroundColor,
       body: Column(
         children: [
           RoomChatHeader(
@@ -919,39 +1020,42 @@ void openUserProfile(RoomChatUserModel user) {
             ),
 
           Expanded(
-            child: ListView.builder(
-              controller: scrollController,
-              padding: EdgeInsets.only(
-                top: R.size(context, 14),
-                bottom: R.size(context, 12),
+            child: Container(
+              color: chatBackgroundColor,
+              child: ListView.builder(
+                controller: scrollController,
+                padding: EdgeInsets.only(
+                  top: R.size(context, 14),
+                  bottom: R.size(context, 12),
+                ),
+                itemCount: messages.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return RoomPinnedHtmlMessage(html: pinnedHtml);
+                  }
+
+                  final message = messages[index - 1];
+
+                  return RoomMessageBubble(
+                    message: message,
+                    onImageTap: message.localPath == null
+                        ? null
+                        : () => openImage(message.localPath!),
+                    onVoicePlay: message.localPath == null
+                        ? null
+                        : () => playVoice(message.localPath!),
+                    onNameLongPress: () {
+                      showUserNameActions(message.sender);
+                    },
+                    onAvatarTap: () {
+                      openUserProfile(message.sender);
+                    },
+                    onAvatarLongPress: () {
+                      showAvatarActions(message.sender);
+                    },
+                  );
+                },
               ),
-              itemCount: messages.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return RoomPinnedHtmlMessage(html: pinnedHtml);
-                }
-
-                final message = messages[index - 1];
-
-                return RoomMessageBubble(
-                  message: message,
-                  onImageTap: message.localPath == null
-                      ? null
-                      : () => openImage(message.localPath!),
-                  onVoicePlay: message.localPath == null
-                      ? null
-                      : () => playVoice(message.localPath!),
-                  onNameLongPress: () {
-                    showUserNameActions(message.sender);
-                  },
-                  onAvatarTap: () {
-                    openUserProfile(message.sender);
-                  },
-                  onAvatarLongPress: () {
-                    showAvatarActions(message.sender);
-                  },
-                );
-              },
             ),
           ),
 
