@@ -4,7 +4,7 @@ class WsEvents {
   static const loginEvent = 'login_event';
   static const registerEvent = 'register_event';
   static const logoutEvent = 'logout_event';
-
+static const userProfileEvent = 'user_profile_event';
   static const userSettingsEvent = 'user_settings_event';
   static const userBlockEvent = 'user_block_event';
 

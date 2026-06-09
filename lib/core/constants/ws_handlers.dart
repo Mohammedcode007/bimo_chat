@@ -2,7 +2,7 @@ class WsHandlers {
   static const authLogin = 'auth.login';
   static const authRegister = 'auth.register';
   static const authLogout = 'auth.logout';
-
+static const usersProfileUpdate = 'users.profile.update';
   static const usersSettingsUpdate = 'users.settings.update';
   static const usersBlock = 'users.block';
   static const usersUnblock = 'users.unblock';
