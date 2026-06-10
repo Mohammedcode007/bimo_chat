@@ -9,8 +9,14 @@ class WsEvents {
   static const userProfileImageEvent = 'user_profile_image_event';
   static const userDeleteAccountEvent = 'user_delete_account_event';
 
+  static const userProfileGetEvent = 'user_profile_get_event';
+  static const usersSearchEvent = 'users_search_event';
+
   static const userSettingsEvent = 'user_settings_event';
   static const userBlockEvent = 'user_block_event';
+
+  static const friendRequestSendEvent = 'friend_request_send_event';
+  static const friendRequestRespondEvent = 'friend_request_respond_event';
 
   static const friendsListEvent = 'friends_list_event';
   static const friendRequestEvent = 'friend_request_event';
@@ -29,6 +35,11 @@ class WsEvents {
   static const tweetLikeEvent = 'tweet_like_event';
   static const tweetCommentEvent = 'tweet_comment_event';
   static const tweetRetweetEvent = 'tweet_retweet_event';
+
+  static const storeItemsEvent = 'store_items_event';
+  static const storeBuyEvent = 'store_buy_event';
+  static const storeActivateEvent = 'store_activate_event';
+  static const storePointsEvent = 'store_points_event';
 
   static const notificationEvent = 'notification_event';
   static const errorEvent = 'error_event';

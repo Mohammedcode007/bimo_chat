@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/responsive.dart';
-import '../../settings/presentation/settings_screen.dart';
+import '../../auth/logic/auth_provider.dart';
+import '../../auth/presentation/login_screen.dart';
 import '../../chats/data/chat_item_model.dart';
 import '../../chats/presentation/chat_screen.dart';
+import '../../notifications/presentation/notifications_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
+import '../../users/presentation/users_search_screen.dart';
 import '../data/friend_model.dart';
-import 'add_friend_screen.dart';
 import 'widgets/friend_card.dart';
 import 'widgets/friends_header.dart';
 
-class FriendsScreen extends StatefulWidget {
+class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
 
   @override
-  State<FriendsScreen> createState() => _FriendsScreenState();
+  ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen> {
+class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   final searchController = TextEditingController();
 
   String query = '';
@@ -97,40 +101,41 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void openAddFriend() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddFriendScreen()),
+      MaterialPageRoute(
+        builder: (_) => const UsersSearchScreen(),
+      ),
     );
   }
 
   void openProfile() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const SettingScreen()),
+      MaterialPageRoute(
+        builder: (_) => const SettingScreen(),
+      ),
     );
   }
 
   void openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const SettingScreen()),
+      MaterialPageRoute(
+        builder: (_) => const SettingScreen(),
+      ),
     );
   }
 
   void openNotifications() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notifications'),
-        behavior: SnackBarBehavior.floating,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const NotificationsScreen(),
       ),
     );
   }
 
   void logout() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Logout'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    ref.read(authProvider.notifier).logout();
   }
 
   void openFriendChat(FriendModel friend) {
@@ -146,7 +151,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ChatScreen(chat: chat)),
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(chat: chat),
+      ),
     );
   }
 
@@ -154,6 +161,21 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final items = filteredFriends;
+
+    ref.listen(authProvider, (previous, next) {
+      final wasLoggedIn = previous?.loggedIn == true;
+      final isLoggedOutNow = next.loggedIn == false;
+
+      if (wasLoggedIn && isLoggedOutNow) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoginScreen(),
+          ),
+          (route) => false,
+        );
+      }
+    });
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -200,7 +222,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.only(bottom: R.size(context, 4)),
+                contentPadding: EdgeInsets.only(
+                  bottom: R.size(context, 4),
+                ),
               ),
             ),
           ),

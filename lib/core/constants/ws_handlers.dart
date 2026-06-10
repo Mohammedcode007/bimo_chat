@@ -7,9 +7,20 @@ class WsHandlers {
   static const usersProfileImageUpdate = 'users.profile.image.update';
   static const usersDeleteAccount = 'users.account.delete';
 
+  static const usersProfileGet = 'users.profile.get';
+  static const usersSearch = 'users.search';
+
   static const usersSettingsUpdate = 'users.settings.update';
   static const usersBlock = 'users.block';
   static const usersUnblock = 'users.unblock';
+
+  static const friendRequestSend = 'friend.request.send';
+  static const friendRequestRespond = 'friend.request.respond';
+
+  static const storeItemsList = 'store.items.list';
+  static const storeItemBuy = 'store.item.buy';
+  static const storeItemActivate = 'store.item.activate';
+  static const storePointsAdd = 'store.points.add';
 
   static const friendsList = 'friends.list';
   static const friendsRequest = 'friends.request';

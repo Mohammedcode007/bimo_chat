@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/responsive.dart';
+import '../../users/logic/users_provider.dart';
+import '../../users/presentation/public_profile_screen.dart';
 import '../data/app_notification_model.dart';
 import 'widgets/notification_card.dart';
 import 'widgets/notifications_header.dart';
 
-class NotificationsScreen extends StatefulWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   String selectedFilter = 'all';
 
-  final List<AppNotificationModel> notifications = const [
-    AppNotificationModel(
+  final List<AppNotificationModel> localNotifications = [
+    const AppNotificationModel(
       id: '1',
       type: AppNotificationType.message,
       userName: 'Mostafa',
@@ -26,17 +30,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       time: '2m',
       isUnread: true,
     ),
-    AppNotificationModel(
-      id: '2',
-      type: AppNotificationType.friendRequest,
-      userName: 'Ahmed',
-      username: 'ahmed',
-      title: 'sent you a friend request',
-      body: 'Ahmed wants to add you as a friend.',
-      time: '10m',
-      isUnread: true,
-    ),
-    AppNotificationModel(
+    const AppNotificationModel(
       id: '3',
       type: AppNotificationType.tweetLike,
       userName: 'Sara',
@@ -46,7 +40,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       time: '25m',
       targetText: 'ده مثال لتويتة داخل Bimo مع @Mostafa و #BimoChat.',
     ),
-    AppNotificationModel(
+    const AppNotificationModel(
       id: '4',
       type: AppNotificationType.tweetComment,
       userName: 'Omar',
@@ -56,7 +50,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       time: '1h',
       targetText: 'Tweet with image preview #Design',
     ),
-    AppNotificationModel(
+    const AppNotificationModel(
       id: '5',
       type: AppNotificationType.tweetRepost,
       userName: 'Mona',
@@ -66,7 +60,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       time: '3h',
       targetText: 'Video tweet preview with @Mohammed',
     ),
-    AppNotificationModel(
+    const AppNotificationModel(
       id: '6',
       type: AppNotificationType.mention,
       userName: 'Khaled',
@@ -79,7 +73,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     ),
   ];
 
-  List<AppNotificationModel> get filteredNotifications {
+  List<AppNotificationModel> friendRequestNotifications(
+    List<Map<String, dynamic>> requests,
+  ) {
+    return requests.map((request) {
+      final fromUser = request['fromUser'] is Map
+          ? Map<String, dynamic>.from(request['fromUser'])
+          : <String, dynamic>{};
+
+      final requestId = request['requestId']?.toString() ?? '';
+      final username = fromUser['username']?.toString() ?? 'User';
+
+      return AppNotificationModel(
+        id: requestId,
+        type: AppNotificationType.friendRequest,
+        userName: username,
+        username: username,
+        title: 'sent you a friend request',
+        body: '$username wants to add you as a friend.',
+        time: 'now',
+        isUnread: true,
+      );
+    }).toList();
+  }
+
+  List<AppNotificationModel> allNotifications(
+    List<Map<String, dynamic>> incomingRequests,
+  ) {
+    return [
+      ...friendRequestNotifications(incomingRequests),
+      ...localNotifications,
+    ];
+  }
+
+  List<AppNotificationModel> filteredNotifications(
+    List<Map<String, dynamic>> incomingRequests,
+  ) {
+    final notifications = allNotifications(incomingRequests);
+
     if (selectedFilter == 'unread') {
       return notifications.where((item) => item.isUnread).toList();
     }
@@ -102,7 +133,42 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return notifications;
   }
 
+  Map<String, dynamic>? findRequestById(String requestId) {
+    final requests = ref.read(usersProvider).incomingFriendRequests;
+
+    for (final request in requests) {
+      if (request['requestId']?.toString() == requestId) {
+        return request;
+      }
+    }
+
+    return null;
+  }
+
   void openNotification(AppNotificationModel notification) {
+    if (notification.type == AppNotificationType.friendRequest) {
+      final request = findRequestById(notification.id);
+
+      if (request == null) return;
+
+      final fromUser = request['fromUser'] is Map
+          ? Map<String, dynamic>.from(request['fromUser'])
+          : <String, dynamic>{};
+
+      final userId = fromUser['userId']?.toString() ?? '';
+
+      if (userId.isEmpty) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PublicProfileScreen(userId: userId),
+        ),
+      );
+
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(notification.title),
@@ -112,21 +178,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void deleteNotification(AppNotificationModel notification) {
+    if (notification.type == AppNotificationType.friendRequest) {
+      final request = findRequestById(notification.id);
+
+      if (request != null) {
+        ref.read(usersProvider.notifier).respondFriendRequest(
+              requestId: notification.id,
+              action: 'reject',
+            );
+      }
+
+      return;
+    }
+
     setState(() {
-      notifications.removeWhere((item) => item.id == notification.id);
+      localNotifications.removeWhere((item) => item.id == notification.id);
     });
   }
 
   void markAllRead() {
     setState(() {
-      for (var i = 0; i < notifications.length; i++) {
-        notifications[i] = notifications[i].copyWith(isUnread: false);
+      for (var i = 0; i < localNotifications.length; i++) {
+        localNotifications[i] =
+            localNotifications[i].copyWith(isUnread: false);
       }
     });
   }
 
   void acceptFriend(AppNotificationModel notification) {
-    deleteNotification(notification);
+    ref.read(usersProvider.notifier).respondFriendRequest(
+          requestId: notification.id,
+          action: 'accept',
+        );
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -137,7 +220,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void rejectFriend(AppNotificationModel notification) {
-    deleteNotification(notification);
+    ref.read(usersProvider.notifier).respondFriendRequest(
+          requestId: notification.id,
+          action: 'reject',
+        );
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -149,8 +235,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final items = filteredNotifications;
+    final usersState = ref.watch(usersProvider);
+    final incomingRequests = usersState.incomingFriendRequests;
+    final items = filteredNotifications(incomingRequests);
+
     final colorScheme = Theme.of(context).colorScheme;
+
+    ref.listen(usersProvider, (previous, next) {
+      if (next.error != null && next.error!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        ref.read(usersProvider.notifier).clearError();
+      }
+    });
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -200,6 +302,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             height: 1,
             color: colorScheme.outlineVariant.withValues(alpha: 0.45),
           ),
+
+          if (usersState.loading)
+            const LinearProgressIndicator(),
 
           Expanded(
             child: items.isEmpty
