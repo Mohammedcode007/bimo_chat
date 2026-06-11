@@ -18,6 +18,14 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   String selectedFilter = 'all';
+  @override
+  void initState() {
+    super.initState();
+
+    Future.microtask(() {
+      ref.read(usersProvider.notifier).getIncomingFriendRequests();
+    });
+  }
 
   final List<AppNotificationModel> localNotifications = [
     const AppNotificationModel(
@@ -161,9 +169,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => PublicProfileScreen(userId: userId),
-        ),
+        MaterialPageRoute(builder: (_) => PublicProfileScreen(userId: userId)),
       );
 
       return;
@@ -182,10 +188,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       final request = findRequestById(notification.id);
 
       if (request != null) {
-        ref.read(usersProvider.notifier).respondFriendRequest(
-              requestId: notification.id,
-              action: 'reject',
-            );
+        ref
+            .read(usersProvider.notifier)
+            .respondFriendRequest(requestId: notification.id, action: 'reject');
       }
 
       return;
@@ -199,17 +204,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void markAllRead() {
     setState(() {
       for (var i = 0; i < localNotifications.length; i++) {
-        localNotifications[i] =
-            localNotifications[i].copyWith(isUnread: false);
+        localNotifications[i] = localNotifications[i].copyWith(isUnread: false);
       }
     });
   }
 
   void acceptFriend(AppNotificationModel notification) {
-    ref.read(usersProvider.notifier).respondFriendRequest(
-          requestId: notification.id,
-          action: 'accept',
-        );
+    ref
+        .read(usersProvider.notifier)
+        .respondFriendRequest(requestId: notification.id, action: 'accept');
+
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      ref.read(usersProvider.notifier).getFriends();
+    });
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -220,10 +228,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void rejectFriend(AppNotificationModel notification) {
-    ref.read(usersProvider.notifier).respondFriendRequest(
-          requestId: notification.id,
-          action: 'reject',
-        );
+    ref
+        .read(usersProvider.notifier)
+        .respondFriendRequest(requestId: notification.id, action: 'reject');
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -303,8 +310,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             color: colorScheme.outlineVariant.withValues(alpha: 0.45),
           ),
 
-          if (usersState.loading)
-            const LinearProgressIndicator(),
+          if (usersState.loading) const LinearProgressIndicator(),
 
           Expanded(
             child: items.isEmpty

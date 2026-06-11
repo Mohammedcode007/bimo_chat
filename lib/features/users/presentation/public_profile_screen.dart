@@ -3,14 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/responsive.dart';
 import '../logic/users_provider.dart';
+import 'package:flutter_html/flutter_html.dart';
 
 class PublicProfileScreen extends ConsumerStatefulWidget {
   final String userId;
 
-  const PublicProfileScreen({
-    super.key,
-    required this.userId,
-  });
+  const PublicProfileScreen({super.key, required this.userId});
 
   @override
   ConsumerState<PublicProfileScreen> createState() =>
@@ -34,7 +32,11 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
       return const Color(0xFF2BCB00);
     }
 
-    return Color(int.parse('FF$hex', radix: 16));
+    try {
+      return Color(int.parse('FF$hex', radix: 16));
+    } catch (_) {
+      return const Color(0xFF2BCB00);
+    }
   }
 
   String textValue(dynamic value) {
@@ -60,6 +62,51 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
     return false;
   }
 
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Future<void> confirmBlockAction({
+    required String userId,
+    required bool isBlocked,
+  }) async {
+    if (userId.trim().isEmpty || userId == '-') return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(isBlocked ? 'Unblock user' : 'Block user'),
+          content: Text(
+            isBlocked
+                ? 'Do you want to unblock this user?'
+                : 'Do you want to block this user?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(isBlocked ? 'Unblock' : 'Block'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    if (isBlocked) {
+      ref.read(usersProvider.notifier).unblockUser(userId);
+    } else {
+      ref.read(usersProvider.notifier).blockUser(userId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(usersProvider);
@@ -79,15 +126,11 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
     });
 
     if (state.loading && profile == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (profile == null) {
-      return const Scaffold(
-        body: Center(child: Text('Profile not found')),
-      );
+      return const Scaffold(body: Center(child: Text('Profile not found')));
     }
 
     final stats = profile['stats'] is Map
@@ -100,7 +143,27 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
     final coverUrl = profile['coverUrl']?.toString() ?? '';
     final accountColor = profile['accountColor']?.toString() ?? '#2BCB00';
     final statusMessage = profile['statusMessage']?.toString().trim() ?? '';
+    final badges = profile['badges'] is List
+        ? List<Map<String, dynamic>>.from(
+            (profile['badges'] as List).map(
+              (item) => Map<String, dynamic>.from(item as Map),
+            ),
+          )
+        : <Map<String, dynamic>>[];
 
+    final badgeValues = badges
+        .map((item) => item['value']?.toString() ?? '')
+        .where((value) => value.trim().isNotEmpty)
+        .toList();
+
+    final oldBadgeValue = profile['badgeValue']?.toString() ?? '';
+
+    if (badgeValues.isEmpty && oldBadgeValue.trim().isNotEmpty) {
+      badgeValues.add(oldBadgeValue);
+    }
+
+    final verificationType = profile['verificationType']?.toString() ?? 'none';
+    final verified = verificationType != 'none';
     final receivedGifts = textValue(stats['giftsReceivedCount']);
     final sentGifts = textValue(stats['giftsSentCount']);
     final views = textValue(stats['profileViewsCount']);
@@ -124,12 +187,19 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
         readBool(profile['hasPendingFriendRequest']) ||
         readBool(profile['isPendingFriendRequest']);
 
-    final isFriend =
-        isFriendFromServer || state.friendUserIds.contains(userId);
+    final isBlockedFromServer =
+        readBool(profile['isBlocked']) ||
+        readBool(profile['blockedByMe']) ||
+        readBool(profile['hasBlockedMe']);
+
+    final isFriend = isFriendFromServer || state.friendUserIds.contains(userId);
 
     final isPending =
         !isFriend &&
         (isPendingFromServer || state.pendingFriendUserIds.contains(userId));
+
+    final isBlocked =
+        isBlockedFromServer || state.blockedUserIds.contains(userId);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -140,8 +210,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
             _ProfileTopName(
               name: username,
               color: nameColor,
+              badges: badgeValues,
+              verified: verified,
             ),
-
             _CoverAvatarSection(
               coverUrl: coverUrl,
               avatarUrl: photoUrl,
@@ -156,18 +227,22 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
               _ProfileActionsRow(
                 isFriend: isFriend,
                 isPending: isPending,
+                isBlocked: isBlocked,
                 onFriendTap: () {
-                  if (isFriend || isPending) return;
+                  if (isFriend || isPending || isBlocked) return;
 
                   ref.read(usersProvider.notifier).sendFriendRequest(userId);
                 },
+                onBlockTap: () {
+                  confirmBlockAction(userId: userId, isBlocked: isBlocked);
+                },
                 onChatTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Chat will be added later'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  if (isBlocked) {
+                    showMessage('You cannot chat with a blocked user');
+                    return;
+                  }
+
+                  showMessage('Chat will be added later');
                 },
               ),
             ],
@@ -177,10 +252,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
             Divider(
               height: 1,
               thickness: 1,
-              color: Theme.of(context)
-                  .colorScheme
-                  .outlineVariant
-                  .withValues(alpha: 0.45),
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.45),
             ),
 
             _StatsRow(
@@ -190,12 +264,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
               friends: friends,
             ),
 
-            _InfoRow(
-              since: since,
-              country: country,
-              gender: gender,
-              age: age,
-            ),
+            _InfoRow(since: since, country: country, gender: gender, age: age),
 
             if (statusMessage.isNotEmpty) _BioBox(text: statusMessage),
 
@@ -210,30 +279,57 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
 class _ProfileTopName extends StatelessWidget {
   final String name;
   final Color color;
+  final List<String> badges;
+  final bool verified;
 
   const _ProfileTopName({
     required this.name,
     required this.color,
+    required this.badges,
+    required this.verified,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       height: R.size(context, 122),
       alignment: Alignment.center,
       padding: EdgeInsets.symmetric(horizontal: R.size(context, 18)),
-      child: Text(
-        name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.rtl,
-        style: TextStyle(
-          color: color,
-          fontSize: R.sp(context, 24),
-          fontWeight: FontWeight.w600,
-          height: 1.1,
-        ),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: R.size(context, 5),
+        runSpacing: R.size(context, 4),
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              color: color,
+              fontSize: R.sp(context, 24),
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+            ),
+          ),
+
+          for (final badge in badges)
+            Text(
+              badge,
+              style: TextStyle(fontSize: R.sp(context, 21), height: 1),
+            ),
+
+          if (verified)
+            Icon(
+              Icons.verified_rounded,
+              color: colorScheme.primary,
+              size: R.size(context, 21),
+            ),
+        ],
       ),
     );
   }
@@ -265,10 +361,7 @@ class _CoverAvatarSection extends StatelessWidget {
 
           Positioned(
             bottom: 0,
-            child: _Avatar(
-              avatarUrl: avatarUrl,
-              avatarText: avatarText,
-            ),
+            child: _Avatar(avatarUrl: avatarUrl, avatarText: avatarText),
           ),
         ],
       ),
@@ -304,10 +397,7 @@ class _Avatar extends StatelessWidget {
   final String avatarUrl;
   final String avatarText;
 
-  const _Avatar({
-    required this.avatarUrl,
-    required this.avatarText,
-  });
+  const _Avatar({required this.avatarUrl, required this.avatarText});
 
   @override
   Widget build(BuildContext context) {
@@ -321,10 +411,7 @@ class _Avatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: pageBackground,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: pageBackground,
-          width: R.size(context, 4),
-        ),
+        border: Border.all(color: pageBackground, width: R.size(context, 4)),
       ),
       child: ClipOval(
         child: avatarUrl.trim().isNotEmpty
@@ -393,17 +480,22 @@ class _UserIdText extends StatelessWidget {
 class _ProfileActionsRow extends StatelessWidget {
   final bool isFriend;
   final bool isPending;
+  final bool isBlocked;
   final VoidCallback onFriendTap;
+  final VoidCallback onBlockTap;
   final VoidCallback onChatTap;
 
   const _ProfileActionsRow({
     required this.isFriend,
     required this.isPending,
+    required this.isBlocked,
     required this.onFriendTap,
+    required this.onBlockTap,
     required this.onChatTap,
   });
 
   IconData get friendIcon {
+    if (isBlocked) return Icons.block_rounded;
     if (isFriend) return Icons.check_circle_rounded;
     if (isPending) return Icons.hourglass_top_rounded;
     return Icons.person_add_alt_1_rounded;
@@ -412,28 +504,51 @@ class _ProfileActionsRow extends StatelessWidget {
   Color friendIconColor(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    if (isBlocked) return Colors.redAccent;
     if (isFriend) return const Color(0xFF2BCB00);
     if (isPending) return const Color(0xFFF59E0B);
     return colorScheme.onSurface;
   }
 
+  IconData get blockIcon {
+    if (isBlocked) return Icons.lock_open_rounded;
+    return Icons.block_rounded;
+  }
+
+  Color blockIconColor(BuildContext context) {
+    if (isBlocked) return const Color(0xFF2BCB00);
+    return Colors.redAccent;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _CircleActionButton(
           icon: friendIcon,
           color: friendIconColor(context),
-          onTap: isFriend || isPending ? null : onFriendTap,
+          onTap: isFriend || isPending || isBlocked ? null : onFriendTap,
+        ),
+
+        SizedBox(width: R.size(context, 18)),
+
+        _CircleActionButton(
+          icon: blockIcon,
+          color: blockIconColor(context),
+          onTap: onBlockTap,
         ),
 
         SizedBox(width: R.size(context, 18)),
 
         _CircleActionButton(
           icon: Icons.chat_bubble_rounded,
-          color: Theme.of(context).colorScheme.onSurface,
-          onTap: onChatTap,
+          color: isBlocked
+              ? colorScheme.onSurfaceVariant.withValues(alpha: 0.45)
+              : colorScheme.onSurface,
+          onTap: isBlocked ? null : onChatTap,
         ),
       ],
     );
@@ -510,16 +625,10 @@ class _StatsRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: _StatItem(
-              value: views,
-              label: 'Views',
-            ),
+            child: _StatItem(value: views, label: 'Views'),
           ),
           Expanded(
-            child: _StatItem(
-              value: friends,
-              label: 'Friends',
-            ),
+            child: _StatItem(value: friends, label: 'Friends'),
           ),
         ],
       ),
@@ -550,28 +659,16 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _InfoItem(
-              value: since,
-              label: 'Since',
-            ),
+            child: _InfoItem(value: since, label: 'Since'),
           ),
           Expanded(
-            child: _InfoItem(
-              value: country,
-              label: 'Country',
-            ),
+            child: _InfoItem(value: country, label: 'Country'),
           ),
           Expanded(
-            child: _InfoItem(
-              value: gender,
-              label: 'Gender',
-            ),
+            child: _InfoItem(value: gender, label: 'Gender'),
           ),
           Expanded(
-            child: _InfoItem(
-              value: age,
-              label: 'Age',
-            ),
+            child: _InfoItem(value: age, label: 'Age'),
           ),
         ],
       ),
@@ -584,11 +681,7 @@ class _StatItem extends StatelessWidget {
   final String label;
   final IconData? icon;
 
-  const _StatItem({
-    required this.value,
-    required this.label,
-    this.icon,
-  });
+  const _StatItem({required this.value, required this.label, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -640,10 +733,7 @@ class _InfoItem extends StatelessWidget {
   final String value;
   final String label;
 
-  const _InfoItem({
-    required this.value,
-    required this.label,
-  });
+  const _InfoItem({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -682,6 +772,42 @@ class _BioBox extends StatelessWidget {
 
   const _BioBox({required this.text});
 
+  bool get hasHtml {
+    final value = text.toLowerCase();
+    return value.contains('<') &&
+        value.contains('>') &&
+        RegExp(r'<\s*[a-z][\s\S]*>', caseSensitive: false).hasMatch(value);
+  }
+
+  String sanitizeHtml(String value) {
+    var html = value;
+
+    html = html.replaceAll(
+      RegExp(
+        r'<\s*(script|style|iframe|object|embed|form|input|button|meta|link|svg|video|audio)[\s\S]*?<\s*/\s*\1\s*>',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    html = html.replaceAll(
+      RegExp(
+        r'<\s*(script|style|iframe|object|embed|form|input|button|meta|link|svg|img|video|audio)[^>]*>',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    html = html.replaceAll(
+      RegExp(r'''\son\w+\s*=\s*["'][\s\S]*?["']''', caseSensitive: false),
+      '',
+    );
+
+    html = html.replaceAll(RegExp(r'javascript\s*:', caseSensitive: false), '');
+
+    return html;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -693,17 +819,70 @@ class _BioBox extends StatelessWidget {
         horizontal: R.size(context, 24),
         vertical: R.size(context, 12),
       ),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.rtl,
-        style: TextStyle(
-          color: colorScheme.onSurface,
-          fontSize: R.sp(context, 20),
-          fontWeight: FontWeight.w400,
-          height: 1.55,
-        ),
-      ),
+      child: hasHtml
+          ? Directionality(
+              textDirection: TextDirection.rtl,
+              child: Html(
+                data: sanitizeHtml(text),
+                style: {
+                  'body': Style(
+                    margin: Margins.zero,
+                    padding: HtmlPaddings.zero,
+                    textAlign: TextAlign.center,
+                    color: colorScheme.onSurface,
+                    fontSize: FontSize(R.sp(context, 20)),
+                    fontWeight: FontWeight.w400,
+                    lineHeight: const LineHeight(1.55),
+                  ),
+                  'h1': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  'h2': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  'h3': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  'h4': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  'h5': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  'h6': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  'p': Style(margin: Margins.zero, textAlign: TextAlign.center),
+                  'div': Style(
+                    margin: Margins.zero,
+                    textAlign: TextAlign.center,
+                  ),
+                },
+              ),
+            )
+          : Text(
+              text,
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: R.sp(context, 20),
+                fontWeight: FontWeight.w400,
+                height: 1.55,
+              ),
+            ),
     );
   }
 }

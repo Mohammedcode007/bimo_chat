@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/responsive.dart';
 import '../../auth/logic/auth_provider.dart';
 import '../../auth/presentation/login_screen.dart';
-import '../../chats/data/chat_item_model.dart';
-import '../../chats/presentation/chat_screen.dart';
+import '../../dm/data/local_chat_model.dart';
+import '../../dm/presentation/dm_chat_screen.dart';
+import '../../dm/logic/dm_provider.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
+import '../../users/logic/users_provider.dart';
 import '../../users/presentation/users_search_screen.dart';
 import '../data/friend_model.dart';
 import 'widgets/friend_card.dart';
@@ -25,42 +27,57 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
 
   String query = '';
 
-  final List<FriendModel> friends = const [
-    FriendModel(
-      id: '1',
-      name: 'hb_bot',
-      username: '@hb_bot',
-      avatarUrl: '',
-      isOnline: true,
-      status: 'Online now',
-    ),
-    FriendModel(
-      id: '2',
-      name: '3yon_7zina',
-      username: '@3yon_7zina',
-      avatarUrl: '',
-      isOnline: false,
-      status: 'اعتزاللل',
-    ),
-    FriendModel(
-      id: '3',
-      name: 'Mostafa',
-      username: '@mostafa',
-      avatarUrl: '',
-      isOnline: true,
-      status: 'Available',
-    ),
-    FriendModel(
-      id: '4',
-      name: 'Ahmed',
-      username: '@ahmed',
-      avatarUrl: '',
-      isOnline: false,
-      status: 'Last seen recently',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
 
-  List<FriendModel> get filteredFriends {
+    Future.microtask(() {
+      ref.read(usersProvider.notifier).getFriends();
+      ref.read(usersProvider.notifier).getIncomingFriendRequests();
+    });
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  bool readBool(dynamic value) {
+    if (value == true) return true;
+    if (value?.toString() == 'true') return true;
+    return false;
+  }
+
+  List<FriendModel> buildFriends(List<Map<String, dynamic>> users) {
+    return users.map((user) {
+      final userId = user['userId']?.toString() ?? '';
+      final username = user['username']?.toString() ?? '';
+      final photoUrl = user['photoUrl']?.toString() ?? '';
+      final status = user['statusMessage']?.toString().trim() ?? '';
+      final current = user['current']?.toString().trim() ?? '';
+
+      final isOnline =
+          current == '1' ||
+          current.toLowerCase() == 'online' ||
+          readBool(user['isOnline']);
+
+      return FriendModel(
+        id: userId,
+        name: username,
+        username: '@$username',
+        avatarUrl: photoUrl,
+        isOnline: isOnline,
+        status: status.isNotEmpty
+            ? status
+            : isOnline
+            ? 'Online now'
+            : 'Offline',
+      );
+    }).toList();
+  }
+
+  List<FriendModel> filteredFriends(List<FriendModel> friends) {
     final text = query.trim().toLowerCase();
 
     List<FriendModel> result;
@@ -86,12 +103,6 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     return result;
   }
 
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
-
   void updateSearch(String value) {
     setState(() {
       query = value;
@@ -101,36 +112,28 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   void openAddFriend() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const UsersSearchScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const UsersSearchScreen()),
     );
   }
 
   void openProfile() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const SettingScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const SettingScreen()),
     );
   }
 
   void openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const SettingScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const SettingScreen()),
     );
   }
 
   void openNotifications() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const NotificationsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
     );
   }
 
@@ -139,28 +142,52 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   }
 
   void openFriendChat(FriendModel friend) {
-    final chat = ChatItemModel(
-      id: friend.id,
-      name: friend.name,
-      lastMessage: '',
-      time: '',
-      avatarUrl: friend.avatarUrl,
+    final myUserId = ref.read(authProvider).userId ?? '';
+
+    if (myUserId.trim().isEmpty || friend.id.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open chat'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final chatId = ref
+        .read(dmProvider.notifier)
+        .makeChatId(myUserId, friend.id);
+
+    final chat = LocalChatModel(
+      chatId: chatId,
+      peerUserId: friend.id,
+      peerUsername: friend.name,
+      peerPhotoUrl: friend.avatarUrl,
+      lastMessageText: '',
+      lastMessageType: 'text',
+      lastMessageAt: DateTime.now(),
       unreadCount: 0,
-      isOnline: friend.isOnline,
     );
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatScreen(chat: chat),
+        builder: (_) => DmChatScreen(myUserId: myUserId, chat: chat),
       ),
     );
+  }
+
+  void removeFriend(FriendModel friend) {
+    ref.read(usersProvider.notifier).removeFriend(friend.id);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final items = filteredFriends;
+    final usersState = ref.watch(usersProvider);
+
+    final allFriends = buildFriends(usersState.friends);
+    final items = filteredFriends(allFriends);
 
     ref.listen(authProvider, (previous, next) {
       final wasLoggedIn = previous?.loggedIn == true;
@@ -169,11 +196,22 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       if (wasLoggedIn && isLoggedOutNow) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-            builder: (_) => const LoginScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
           (route) => false,
         );
+      }
+    });
+
+    ref.listen(usersProvider, (previous, next) {
+      if (next.error != null && next.error!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        ref.read(usersProvider.notifier).clearError();
       }
     });
 
@@ -222,12 +260,12 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.only(
-                  bottom: R.size(context, 4),
-                ),
+                contentPadding: EdgeInsets.only(bottom: R.size(context, 4)),
               ),
             ),
           ),
+
+          if (usersState.loading) const LinearProgressIndicator(),
 
           Expanded(
             child: items.isEmpty
@@ -241,20 +279,71 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                       ),
                     ),
                   )
-                : ListView.builder(
-                    padding: EdgeInsets.zero,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final friend = items[index];
-
-                      return FriendCard(
-                        friend: friend,
-                        onTap: () => openFriendChat(friend),
-                        onMessageTap: () => openFriendChat(friend),
-                      );
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      ref.read(usersProvider.notifier).getFriends();
                     },
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final friend = items[index];
+
+                        return Dismissible(
+                          key: ValueKey(friend.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: EdgeInsetsDirectional.only(
+                              end: R.size(context, 20),
+                            ),
+                            color: Colors.redAccent,
+                            child: const Icon(
+                              Icons.person_remove_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                          confirmDismiss: (_) async {
+                            return await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) {
+                                    return AlertDialog(
+                                      title: const Text('Remove friend'),
+                                      content: Text(
+                                        'Remove ${friend.name} from friends?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context, false);
+                                          },
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context, true);
+                                          },
+                                          child: const Text('Remove'),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ) ??
+                                false;
+                          },
+                          onDismissed: (_) {
+                            removeFriend(friend);
+                          },
+                          child: FriendCard(
+                            friend: friend,
+                            onTap: () => openFriendChat(friend),
+                            onMessageTap: () => openFriendChat(friend),
+                          ),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

@@ -34,11 +34,11 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
   }
 
   void openProfile(String userId) {
+    if (userId.trim().isEmpty) return;
+
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => PublicProfileScreen(userId: userId),
-      ),
+      MaterialPageRoute(builder: (_) => PublicProfileScreen(userId: userId)),
     );
   }
 
@@ -49,7 +49,11 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
       return const Color(0xFF2BCB00);
     }
 
-    return Color(int.parse('FF$hex', radix: 16));
+    try {
+      return Color(int.parse('FF$hex', radix: 16));
+    } catch (_) {
+      return const Color(0xFF2BCB00);
+    }
   }
 
   bool readBool(dynamic value) {
@@ -77,9 +81,7 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Search users'),
-      ),
+      appBar: AppBar(title: const Text('Search users')),
       body: Column(
         children: [
           Padding(
@@ -87,6 +89,7 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
             child: TextField(
               controller: searchController,
               onChanged: onSearchChanged,
+              textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: 'Search username',
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -113,37 +116,47 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
                 : ListView.separated(
                     padding: EdgeInsets.all(R.size(context, 12)),
                     itemCount: usersState.searchResults.length,
-                    separatorBuilder: (_, __) =>
-                        SizedBox(height: R.size(context, 8)),
+                    separatorBuilder: (_, __) {
+                      return SizedBox(height: R.size(context, 8));
+                    },
                     itemBuilder: (context, index) {
                       final user = usersState.searchResults[index];
 
                       final userId = user['userId']?.toString() ?? '';
                       final username = user['username']?.toString() ?? '';
                       final photoUrl = user['photoUrl']?.toString() ?? '';
+
                       final accountColor =
                           user['accountColor']?.toString() ?? '#2BCB00';
 
-                      final badgeValue =
-                          user['badgeValue']?.toString() ?? '';
+                      final badgeValue = user['badgeValue']?.toString() ?? '';
 
                       final verificationType =
                           user['verificationType']?.toString() ?? 'none';
 
-                      final isFriendFromServer =
-                          readBool(user['isFriend']);
+                      final isFriendFromServer = readBool(user['isFriend']);
 
                       final isPendingFromServer =
                           readBool(user['hasPendingFriendRequest']) ||
-                              readBool(user['isPendingFriendRequest']);
+                          readBool(user['isPendingFriendRequest']);
 
-                      final isFriend = isFriendFromServer ||
+                      final isBlockedFromServer =
+                          readBool(user['isBlocked']) ||
+                          readBool(user['blockedByMe']) ||
+                          readBool(user['hasBlockedMe']);
+
+                      final isFriend =
+                          isFriendFromServer ||
                           usersState.friendUserIds.contains(userId);
 
-                      final isPending = !isFriend &&
+                      final isPending =
+                          !isFriend &&
                           (isPendingFromServer ||
-                              usersState.pendingFriendUserIds
-                                  .contains(userId));
+                              usersState.pendingFriendUserIds.contains(userId));
+
+                      final isBlocked =
+                          isBlockedFromServer ||
+                          usersState.blockedUserIds.contains(userId);
 
                       return _UserSearchCard(
                         username: username,
@@ -153,15 +166,18 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
                         verified: verificationType != 'none',
                         isFriend: isFriend,
                         isPending: isPending,
+                        isBlocked: isBlocked,
                         onTap: () => openProfile(userId),
                         onAddFriend: () {
-                          if (isFriend || isPending) return;
+                          if (isFriend || isPending || isBlocked) return;
 
                           ref
                               .read(usersProvider.notifier)
                               .sendFriendRequest(userId);
                         },
                         onChat: () {
+                          if (isBlocked) return;
+
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Chat will be added later'),
@@ -187,6 +203,7 @@ class _UserSearchCard extends StatelessWidget {
   final bool verified;
   final bool isFriend;
   final bool isPending;
+  final bool isBlocked;
   final VoidCallback onTap;
   final VoidCallback onAddFriend;
   final VoidCallback onChat;
@@ -199,23 +216,43 @@ class _UserSearchCard extends StatelessWidget {
     required this.verified,
     required this.isFriend,
     required this.isPending,
+    required this.isBlocked,
     required this.onTap,
     required this.onAddFriend,
     required this.onChat,
   });
 
   IconData get friendIcon {
+    if (isBlocked) return Icons.block_rounded;
     if (isFriend) return Icons.check_circle_rounded;
     if (isPending) return Icons.hourglass_top_rounded;
     return Icons.person_add_alt_1_rounded;
   }
 
-  Color iconColor(BuildContext context) {
+  Color friendIconColor(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    if (isBlocked) return Colors.redAccent;
     if (isFriend) return const Color(0xFF2BCB00);
     if (isPending) return const Color(0xFFF59E0B);
     return colorScheme.onSurfaceVariant;
+  }
+
+  Color chatIconColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (isBlocked) {
+      return colorScheme.onSurfaceVariant.withValues(alpha: 0.45);
+    }
+
+    return colorScheme.onSurfaceVariant;
+  }
+
+  String get friendTooltip {
+    if (isBlocked) return 'Blocked';
+    if (isFriend) return 'Friend';
+    if (isPending) return 'Pending';
+    return 'Add friend';
   }
 
   @override
@@ -235,8 +272,9 @@ class _UserSearchCard extends StatelessWidget {
               CircleAvatar(
                 radius: R.size(context, 27),
                 backgroundColor: color.withValues(alpha: 0.2),
-                backgroundImage:
-                    photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                backgroundImage: photoUrl.isNotEmpty
+                    ? NetworkImage(photoUrl)
+                    : null,
                 child: photoUrl.isEmpty
                     ? Icon(
                         Icons.person_rounded,
@@ -283,17 +321,22 @@ class _UserSearchCard extends StatelessWidget {
                 ),
               ),
 
-              IconButton(
-                onPressed: isFriend || isPending ? null : onAddFriend,
-                icon: Icon(
-                  friendIcon,
-                  color: iconColor(context),
+              Tooltip(
+                message: friendTooltip,
+                child: IconButton(
+                  onPressed: isFriend || isPending || isBlocked
+                      ? null
+                      : onAddFriend,
+                  icon: Icon(friendIcon, color: friendIconColor(context)),
                 ),
               ),
 
               IconButton(
-                onPressed: onChat,
-                icon: const Icon(Icons.chat_bubble_rounded),
+                onPressed: isBlocked ? null : onChat,
+                icon: Icon(
+                  Icons.chat_bubble_rounded,
+                  color: chatIconColor(context),
+                ),
               ),
             ],
           ),

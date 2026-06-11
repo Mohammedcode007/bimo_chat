@@ -14,6 +14,7 @@ import 'widgets/profile_header.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/setting_switch_tile.dart';
 import 'widgets/setting_text_tile.dart';
+import '../../users/logic/users_provider.dart';
 
 class SettingScreen extends ConsumerStatefulWidget {
   const SettingScreen({super.key});
@@ -115,15 +116,138 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
   void showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
     );
   }
 
   void updateProfile(Map<String, dynamic> data) {
     ref.read(authProvider.notifier).updateProfile(data);
+  }
+
+  Future<void> openBlockedUsersSheet() async {
+    ref.read(usersProvider.notifier).getBlockedUsers();
+
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final usersState = ref.watch(usersProvider);
+            final colorScheme = Theme.of(context).colorScheme;
+            final blockedUsers = usersState.blockedUsers;
+
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.55,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Blocked users',
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (usersState.loading) const LinearProgressIndicator(),
+
+                    Expanded(
+                      child: blockedUsers.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No blocked users',
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+                              itemCount: blockedUsers.length,
+                              separatorBuilder: (_, __) {
+                                return Divider(
+                                  height: 1,
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: 0.45,
+                                  ),
+                                );
+                              },
+                              itemBuilder: (context, index) {
+                                final user = blockedUsers[index];
+
+                                final userId = user['userId']?.toString() ?? '';
+
+                                final username =
+                                    user['username']?.toString() ?? 'User';
+
+                                final photoUrl =
+                                    user['photoUrl']?.toString() ?? '';
+
+                                return ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: CircleAvatar(
+                                    backgroundImage: photoUrl.isNotEmpty
+                                        ? NetworkImage(photoUrl)
+                                        : null,
+                                    child: photoUrl.isEmpty
+                                        ? const Icon(Icons.person_rounded)
+                                        : null,
+                                  ),
+                                  title: Text(
+                                    username,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  trailing: IconButton(
+                                    tooltip: 'Unblock',
+                                    onPressed: () {
+                                      ref
+                                          .read(usersProvider.notifier)
+                                          .unblockUser(userId);
+                                    },
+                                    icon: const Icon(
+                                      Icons.lock_open_rounded,
+                                      color: Color(0xFF2BCB00),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void logout() {
@@ -140,10 +264,9 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
     if (base64 == null) return;
 
-    ref.read(authProvider.notifier).updateProfileImage(
-          imageType: imageType,
-          base64: base64,
-        );
+    ref
+        .read(authProvider.notifier)
+        .updateProfileImage(imageType: imageType, base64: base64);
   }
 
   Future<void> confirmDeleteAccount() async {
@@ -195,9 +318,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
             controller: controller,
             autofocus: true,
             obscureText: obscureText,
-            decoration: InputDecoration(
-              hintText: title,
-            ),
+            decoration: InputDecoration(hintText: title),
           ),
           actions: [
             TextButton(
@@ -222,9 +343,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
       return;
     }
 
-    updateProfile({
-      fieldKey: result,
-    });
+    updateProfile({fieldKey: result});
   }
 
   Future<void> editChoiceField({
@@ -254,9 +373,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
     if (result == null) return;
 
-    updateProfile({
-      fieldKey: result,
-    });
+    updateProfile({fieldKey: result});
   }
 
   Future<void> pickCountry() async {
@@ -264,9 +381,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
       context: context,
       showPhoneCode: false,
       countryListTheme: CountryListThemeData(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(22),
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         inputDecoration: const InputDecoration(
           labelText: 'Search',
           hintText: 'Search country',
@@ -274,9 +389,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
         ),
       ),
       onSelect: (Country country) {
-        updateProfile({
-          'country': country.name,
-        });
+        updateProfile({'country': country.name});
       },
     );
   }
@@ -293,7 +406,9 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: initialDate.isAfter(now) ? DateTime(2000, 1, 1) : initialDate,
+      initialDate: initialDate.isAfter(now)
+          ? DateTime(2000, 1, 1)
+          : initialDate,
       firstDate: DateTime(1900, 1, 1),
       lastDate: now,
       helpText: 'Select birthdate',
@@ -303,9 +418,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
 
     final formatted = DateFormat('yyyy-MM-dd').format(picked);
 
-    updateProfile({
-      'birth_day': formatted,
-    });
+    updateProfile({'birth_day': formatted});
   }
 
   Future<void> pickGender(String currentGender) async {
@@ -313,11 +426,7 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
       title: 'Gender',
       fieldKey: 'gender',
       currentValue: currentGender,
-      options: const {
-        'male': 'Male',
-        'female': 'Female',
-        'other': 'Other',
-      },
+      options: const {'male': 'Male', 'female': 'Female', 'other': 'Other'},
     );
   }
 
@@ -326,75 +435,63 @@ class _SettingScreenState extends ConsumerState<SettingScreen> {
     final auth = ref.watch(authProvider);
     final user = auth.user ?? <String, dynamic>{};
 
-ref.listen(authProvider, (previous, next) {
-  final wasLoggedIn = previous?.loggedIn == true;
-  final isLoggedOutNow = next.loggedIn == false;
+    ref.listen(authProvider, (previous, next) {
+      final wasLoggedIn = previous?.loggedIn == true;
+      final isLoggedOutNow = next.loggedIn == false;
 
-  if (wasLoggedIn && isLoggedOutNow) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
-    return;
-  }
+      if (wasLoggedIn && isLoggedOutNow) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+        return;
+      }
 
-  if (next.error != null && next.error!.isNotEmpty) {
-    showMessage(next.error!);
-  }
-});
+      if (next.error != null && next.error!.isNotEmpty) {
+        showMessage(next.error!);
+      }
+    });
     final app = AppController.of(context);
     final lang = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final username = userText(
-      user,
-      ['username', 'name'],
-      fallback: auth.username ?? 'User',
-    );
+    final username = userText(user, [
+      'username',
+      'name',
+    ], fallback: auth.username ?? 'User');
 
-    final avatarUrl = userText(
-      user,
-      ['photoUrl', 'avatarUrl', 'photo_url', 'avatar_url'],
-      fallback: defaultAvatarUrl,
-    );
+    final avatarUrl = userText(user, [
+      'photoUrl',
+      'avatarUrl',
+      'photo_url',
+      'avatar_url',
+    ], fallback: defaultAvatarUrl);
 
-    final coverUrl = userText(
-      user,
-      ['coverUrl', 'cover_url'],
-      fallback: defaultCoverUrl,
-    );
+    final coverUrl = userText(user, [
+      'coverUrl',
+      'cover_url',
+    ], fallback: defaultCoverUrl);
 
-    final statusMessage = userText(
-      user,
-      ['statusMessage', 'status_message', 'bio', 'current'],
-      fallback: 'No status message',
-    );
+    final statusMessage = userText(user, [
+      'statusMessage',
+      'status_message',
+      'bio',
+      'current',
+    ], fallback: 'No status message');
 
-    final email = userText(
-      user,
-      ['email'],
-      fallback: '',
-    );
+    final email = userText(user, ['email'], fallback: '');
 
-    final birthdate = userText(
-      user,
-      ['birthdate', 'dateOfBirth', 'date_of_birth'],
-      fallback: 'Not added',
-    );
+    final birthdate = userText(user, [
+      'birthdate',
+      'dateOfBirth',
+      'date_of_birth',
+    ], fallback: 'Not added');
 
-    final country = userText(
-      user,
-      ['country'],
-      fallback: 'Not added',
-    );
+    final country = userText(user, ['country'], fallback: 'Not added');
 
-    final gender = userText(
-      user,
-      ['gender'],
-      fallback: '',
-    );
+    final gender = userText(user, ['gender'], fallback: '');
 
     final privateLock = user['privateLock'] == true;
     final autoJoinStream = user['autoJoinStream'] == true;
@@ -474,9 +571,7 @@ ref.listen(authProvider, (previous, next) {
                   title: lang.t('private_lock'),
                   value: privateLock,
                   onChanged: (value) {
-                    updateProfile({
-                      'private_lock': value,
-                    });
+                    updateProfile({'private_lock': value});
                   },
                 ),
 
@@ -520,9 +615,7 @@ ref.listen(authProvider, (previous, next) {
                   title: lang.t('auto_join_stream'),
                   value: autoJoinStream,
                   onChanged: (value) {
-                    updateProfile({
-                      'auto_join_stream': value,
-                    });
+                    updateProfile({'auto_join_stream': value});
                   },
                 ),
 
@@ -530,9 +623,7 @@ ref.listen(authProvider, (previous, next) {
                   title: lang.t('hide_activity_status'),
                   value: hideActivityStatus,
                   onChanged: (value) {
-                    updateProfile({
-                      'hide_activity_status': value,
-                    });
+                    updateProfile({'hide_activity_status': value});
                   },
                 ),
               ],
@@ -602,9 +693,9 @@ ref.listen(authProvider, (previous, next) {
 
                 SettingTextTile(
                   title: lang.t('blocked_users'),
-                  onTap: () => showMessage(lang.t('blocked_users')),
+                  trailingIcon: Icons.block_rounded,
+                  onTap: openBlockedUsersSheet,
                 ),
-
                 SettingTextTile(
                   title: lang.t('sessions_log'),
                   onTap: () => showMessage(lang.t('sessions_log')),
