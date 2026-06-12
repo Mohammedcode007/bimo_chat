@@ -48,35 +48,49 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     if (value?.toString() == 'true') return true;
     return false;
   }
+List<FriendModel> buildFriends(List<Map<String, dynamic>> users) {
+  return users.map((user) {
+    final userId = user['userId']?.toString() ?? '';
+    final username = user['username']?.toString() ?? '';
+    final photoUrl = user['photoUrl']?.toString() ?? '';
+    final statusMessage = user['statusMessage']?.toString().trim() ?? '';
+    final current = user['current']?.toString().trim() ?? '';
 
-  List<FriendModel> buildFriends(List<Map<String, dynamic>> users) {
-    return users.map((user) {
-      final userId = user['userId']?.toString() ?? '';
-      final username = user['username']?.toString() ?? '';
-      final photoUrl = user['photoUrl']?.toString() ?? '';
-      final status = user['statusMessage']?.toString().trim() ?? '';
-      final current = user['current']?.toString().trim() ?? '';
+    final hideActivityStatus =
+        readBool(user['hideActivityStatus']) ||
+        readBool(user['hide_activity_status']);
 
-      final isOnline =
-          current == '1' ||
-          current.toLowerCase() == 'online' ||
-          readBool(user['isOnline']);
+    final isManualOffline =
+        readBool(user['isManualOffline']) ||
+        readBool(user['is_manual_offline']);
 
-      return FriendModel(
-        id: userId,
-        name: username,
-        username: '@$username',
-        avatarUrl: photoUrl,
-        isOnline: isOnline,
-        status: status.isNotEmpty
-            ? status
-            : isOnline
-            ? 'Online now'
-            : 'Offline',
-      );
-    }).toList();
-  }
+    final isHidden = hideActivityStatus || isManualOffline;
 
+    final realOnline =
+        current == '1' ||
+        current.toLowerCase() == 'online' ||
+        readBool(user['isOnline']);
+
+    /*
+      لو المستخدم مخفي الحالة:
+      يظهر Offline مهما كان current أو isOnline.
+    */
+    final isOnline = isHidden ? false : realOnline;
+
+    return FriendModel(
+      id: userId,
+      name: username,
+      username: '@$username',
+      avatarUrl: photoUrl,
+      isOnline: isOnline,
+      status: statusMessage.isNotEmpty
+          ? statusMessage
+          : isOnline
+              ? 'Online now'
+              : 'Offline',
+    );
+  }).toList();
+}
   List<FriendModel> filteredFriends(List<FriendModel> friends) {
     final text = query.trim().toLowerCase();
 
@@ -183,8 +197,15 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final usersState = ref.watch(usersProvider);
+   final colorScheme = Theme.of(context).colorScheme;
+final usersState = ref.watch(usersProvider);
+final authState = ref.watch(authProvider);
+
+final myUsername =
+    authState.username ?? authState.user?['username']?.toString() ?? '';
+
+final myPhotoUrl =
+    authState.photoUrl ?? authState.user?['photoUrl']?.toString() ?? '';
 
     final allFriends = buildFriends(usersState.friends);
     final items = filteredFriends(allFriends);
@@ -219,13 +240,15 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          FriendsHeader(
-            onAvatarTap: openProfile,
-            onAddTap: openAddFriend,
-            onNotificationTap: openNotifications,
-            onSettingsTap: openSettings,
-            onLogoutTap: logout,
-          ),
+        FriendsHeader(
+  username: myUsername,
+  photoUrl: myPhotoUrl,
+  onAvatarTap: openProfile,
+  onAddTap: openAddFriend,
+  onNotificationTap: openNotifications,
+  onSettingsTap: openSettings,
+  onLogoutTap: logout,
+),
 
           Container(
             height: R.size(context, 52),
@@ -280,9 +303,10 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                     ),
                   )
                 : RefreshIndicator(
-                    onRefresh: () async {
-                      ref.read(usersProvider.notifier).getFriends();
-                    },
+                 onRefresh: () async {
+  ref.read(usersProvider.notifier).getFriends();
+  ref.read(usersProvider.notifier).getIncomingFriendRequests();
+},
                     child: ListView.builder(
                       padding: EdgeInsets.zero,
                       keyboardDismissBehavior:

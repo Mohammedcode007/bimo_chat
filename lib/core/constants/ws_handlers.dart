@@ -10,7 +10,8 @@ class WsHandlers {
   static const usersSettingsUpdate = 'users.settings.update';
   static const usersBlock = 'users.block';
   static const usersUnblock = 'users.unblock';
-
+static const dmOpen = 'dm.open';
+static const dmClose = 'dm.close';
   static const friendRequestRespond = 'friend.request.respond';
 
   static const storeItemsList = 'store.items.list';

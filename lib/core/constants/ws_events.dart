@@ -8,7 +8,8 @@ class WsEvents {
   static const userProfileEvent = 'user_profile_event';
   static const userProfileImageEvent = 'user_profile_image_event';
   static const userDeleteAccountEvent = 'user_delete_account_event';
-
+static const dmOpenEvent = 'dm_open_event';
+static const dmCloseEvent = 'dm_close_event';
   static const userSettingsEvent = 'user_settings_event';
   static const userBlockEvent = 'user_block_event';
 

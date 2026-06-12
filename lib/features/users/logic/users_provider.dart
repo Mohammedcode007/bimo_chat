@@ -333,37 +333,56 @@ class UsersController extends StateNotifier<UsersState> {
         return;
       }
 
-      if (handler == WsEvents.friendsGetEvent) {
-        if (type == 'success') {
-          final friendsList = data['friends'] is List
-              ? List<Map<String, dynamic>>.from(
-                  (data['friends'] as List).map(
-                    (item) => Map<String, dynamic>.from(item as Map),
-                  ),
-                )
-              : <Map<String, dynamic>>[];
+    if (handler == WsEvents.friendsGetEvent) {
+  if (type == 'success') {
+    final friendsList = data['friends'] is List
+        ? List<Map<String, dynamic>>.from(
+            (data['friends'] as List).map(
+              (item) => Map<String, dynamic>.from(item as Map),
+            ),
+          )
+        : <Map<String, dynamic>>[];
 
-          final friendIds = friendsList
-              .map((item) => item['userId']?.toString() ?? '')
-              .where((id) => id.isNotEmpty)
-              .toSet();
+    final friendIds = <String>{};
+    final blockedIds = Set<String>.from(state.blockedUserIds);
+    final pendingIds = Set<String>.from(state.pendingFriendUserIds);
 
-          state = state.copyWith(
-            loading: false,
-            error: null,
-            friends: friendsList,
-            friendUserIds: friendIds,
-          );
-          return;
-        }
+    for (final friend in friendsList) {
+      final userId = friend['userId']?.toString() ?? '';
 
-        state = state.copyWith(
-          loading: false,
-          error: data['reason']?.toString() ?? 'friends_get_error',
-        );
-        return;
+      if (userId.isEmpty) continue;
+
+      friendIds.add(userId);
+
+      if (_readBool(friend['isBlocked']) ||
+          _readBool(friend['blockedByMe']) ||
+          _readBool(friend['hasBlockedMe'])) {
+        blockedIds.add(userId);
       }
 
+      if (_readBool(friend['hasPendingFriendRequest']) ||
+          _readBool(friend['isPendingFriendRequest'])) {
+        pendingIds.add(userId);
+      }
+    }
+
+    state = state.copyWith(
+      loading: false,
+      error: null,
+      friends: friendsList,
+      friendUserIds: friendIds,
+      blockedUserIds: blockedIds,
+      pendingFriendUserIds: pendingIds,
+    );
+    return;
+  }
+
+  state = state.copyWith(
+    loading: false,
+    error: data['reason']?.toString() ?? 'friends_get_error',
+  );
+  return;
+}
       if (handler == WsEvents.friendRemoveEvent) {
         if (type == 'success' || type == 'friend_removed') {
           final removedUserId = data['removedUserId']?.toString() ?? '';

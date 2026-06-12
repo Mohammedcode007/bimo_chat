@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/utils/responsive.dart';
 
 class FriendsHeader extends StatelessWidget {
+  final String username;
+  final String photoUrl;
   final VoidCallback onAvatarTap;
   final VoidCallback onAddTap;
   final VoidCallback onNotificationTap;
@@ -10,6 +12,8 @@ class FriendsHeader extends StatelessWidget {
 
   const FriendsHeader({
     super.key,
+    required this.username,
+    required this.photoUrl,
     required this.onAvatarTap,
     required this.onAddTap,
     required this.onNotificationTap,
@@ -32,18 +36,27 @@ class FriendsHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            InkWell(
-              onTap: onAvatarTap,
-              borderRadius: BorderRadius.circular(999),
-              child: CircleAvatar(
-                radius: R.size(context, 32),
-                backgroundImage: const NetworkImage(
-                  'https://picsum.photos/200',
-                ),
-                backgroundColor: const Color(0xFFDDE7FF),
-              ),
+   InkWell(
+  onTap: onAvatarTap,
+  borderRadius: BorderRadius.circular(999),
+  child: CircleAvatar(
+    radius: R.size(context, 32),
+    backgroundColor: const Color(0xFFDDE7FF),
+    backgroundImage: photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl),
+    child: photoUrl.trim().isEmpty
+        ? Text(
+            username.trim().isEmpty
+                ? '?'
+                : username.characters.first.toUpperCase(),
+            style: TextStyle(
+              color: colorScheme.primary,
+              fontSize: R.sp(context, 24),
+              fontWeight: FontWeight.w900,
             ),
-
+          )
+        : null,
+  ),
+),
             SizedBox(width: R.size(context, 18)),
 
             Expanded(

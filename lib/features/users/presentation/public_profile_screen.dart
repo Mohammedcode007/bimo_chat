@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/responsive.dart';
 import '../logic/users_provider.dart';
 import 'package:flutter_html/flutter_html.dart';
-
+import '../../auth/logic/auth_provider.dart';
+import '../../dm/data/local_chat_model.dart';
+import '../../dm/presentation/dm_chat_screen.dart';
 class PublicProfileScreen extends ConsumerStatefulWidget {
   final String userId;
 
@@ -67,7 +69,48 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
+void openChat({
+  required String myUserId,
+  required String peerUserId,
+  required String peerUsername,
+  required String peerPhotoUrl,
+}) {
+  if (myUserId.trim().isEmpty) {
+    showMessage('Please login first');
+    return;
+  }
 
+  if (peerUserId.trim().isEmpty || peerUserId == '-') return;
+
+  if (myUserId == peerUserId) {
+    showMessage('You cannot chat with yourself');
+    return;
+  }
+
+  final ids = [myUserId, peerUserId]..sort();
+  final chatId = '${ids[0]}_${ids[1]}';
+
+  final chat = LocalChatModel(
+    chatId: chatId,
+    peerUserId: peerUserId,
+    peerUsername: peerUsername,
+    peerPhotoUrl: peerPhotoUrl,
+    lastMessageText: '',
+    lastMessageType: 'text',
+    lastMessageAt: DateTime.now(),
+    unreadCount: 0,
+  );
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DmChatScreen(
+        myUserId: myUserId,
+        chat: chat,
+      ),
+    ),
+  );
+}
   Future<void> confirmBlockAction({
     required String userId,
     required bool isBlocked,
@@ -109,8 +152,11 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(usersProvider);
-    final profile = state.profile;
+  final state = ref.watch(usersProvider);
+final authState = ref.watch(authProvider);
+final profile = state.profile;
+
+final myUserId = authState.userId ?? '';
 
     ref.listen(usersProvider, (previous, next) {
       if (next.error != null && next.error!.isNotEmpty) {
@@ -236,14 +282,19 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                 onBlockTap: () {
                   confirmBlockAction(userId: userId, isBlocked: isBlocked);
                 },
-                onChatTap: () {
-                  if (isBlocked) {
-                    showMessage('You cannot chat with a blocked user');
-                    return;
-                  }
+          onChatTap: () {
+  if (isBlocked) {
+    showMessage('You cannot chat with a blocked user');
+    return;
+  }
 
-                  showMessage('Chat will be added later');
-                },
+  openChat(
+    myUserId: myUserId,
+    peerUserId: userId,
+    peerUsername: username,
+    peerPhotoUrl: photoUrl,
+  );
+},
               ),
             ],
 

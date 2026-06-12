@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/responsive.dart';
 import '../logic/users_provider.dart';
 import 'public_profile_screen.dart';
-
+import '../../auth/logic/auth_provider.dart';
+import '../../dm/data/local_chat_model.dart';
+import '../../dm/presentation/dm_chat_screen.dart';
 class UsersSearchScreen extends ConsumerStatefulWidget {
   const UsersSearchScreen({super.key});
 
@@ -41,7 +43,49 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
       MaterialPageRoute(builder: (_) => PublicProfileScreen(userId: userId)),
     );
   }
+void openChat({
+  required String myUserId,
+  required String peerUserId,
+  required String peerUsername,
+  required String peerPhotoUrl,
+}) {
+  if (myUserId.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please login first'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
 
+  if (peerUserId.trim().isEmpty) return;
+  if (myUserId == peerUserId) return;
+
+  final ids = [myUserId, peerUserId]..sort();
+  final chatId = '${ids[0]}_${ids[1]}';
+
+  final chat = LocalChatModel(
+    chatId: chatId,
+    peerUserId: peerUserId,
+    peerUsername: peerUsername,
+    peerPhotoUrl: peerPhotoUrl,
+    lastMessageText: '',
+    lastMessageType: 'text',
+    lastMessageAt: DateTime.now(),
+    unreadCount: 0,
+  );
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DmChatScreen(
+        myUserId: myUserId,
+        chat: chat,
+      ),
+    ),
+  );
+}
   Color hexToColor(String value) {
     final hex = value.replaceAll('#', '').trim();
 
@@ -64,9 +108,11 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final usersState = ref.watch(usersProvider);
-    final colorScheme = Theme.of(context).colorScheme;
+  final usersState = ref.watch(usersProvider);
+final authState = ref.watch(authProvider);
+final colorScheme = Theme.of(context).colorScheme;
 
+final myUserId = authState.userId ?? '';
     ref.listen(usersProvider, (previous, next) {
       if (next.error != null && next.error!.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -175,16 +221,16 @@ class _UsersSearchScreenState extends ConsumerState<UsersSearchScreen> {
                               .read(usersProvider.notifier)
                               .sendFriendRequest(userId);
                         },
-                        onChat: () {
-                          if (isBlocked) return;
+                    onChat: () {
+  if (isBlocked) return;
 
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Chat will be added later'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
+  openChat(
+    myUserId: myUserId,
+    peerUserId: userId,
+    peerUsername: username,
+    peerPhotoUrl: photoUrl,
+  );
+},
                       );
                     },
                   ),

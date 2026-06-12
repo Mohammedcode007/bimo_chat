@@ -8,7 +8,7 @@ import '../../../core/utils/responsive.dart';
 import '../data/local_chat_model.dart';
 import '../data/local_message_model.dart';
 import '../logic/dm_provider.dart';
-
+import '../../users/logic/users_provider.dart';
 class DmChatScreen extends ConsumerStatefulWidget {
   final LocalChatModel chat;
   final String myUserId;
@@ -26,41 +26,100 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
   LocalMessageModel? replyMessage;
   LocalMessageModel? editingMessage;
 
-  Timer? typingTimer;
-  bool typingSent = false;
+Timer? typingTimer;
+bool typingSent = false;
+int _lastMessagesCount = 0;
+/*
+  يمنع تكرار closeChat أكثر من مرة.
+*/
+bool _closed = false;
 
-  @override
-  void initState() {
-    super.initState();
+/*
+  يمنع إرسال seen لنفس الرسائل أكثر من مرة.
+*/
+final Set<String> seenSentMessageIds = {};
+@override
+@override
+void initState() {
+  super.initState();
 
-    Future.microtask(() async {
-      await ref.read(dmProvider.notifier).openChat(widget.chat.chatId);
-      _markUnreadIncomingSeen();
-      scrollToBottom(jump: true);
-    });
+  Future.microtask(() async {
+    print('[DM_FLUTTER_INIT_OPEN_CHAT] chatId=${widget.chat.chatId}');
 
-    messageController.addListener(_handleTyping);
+    ref.read(usersProvider.notifier).getFriends();
+
+    await ref.read(dmProvider.notifier).openChat(widget.chat.chatId);
+
+    final messages = ref.read(dmProvider).messagesFor(widget.chat.chatId);
+    _lastMessagesCount = messages.length;
+
+    print(
+      '[DM_FLUTTER_INIT_MESSAGES_COUNT] '
+      'chatId=${widget.chat.chatId} '
+      'count=$_lastMessagesCount',
+    );
+
+    _markUnreadIncomingSeen();
+    scrollToBottom(jump: true);
+  });
+
+  messageController.addListener(_handleTyping);
+}
+void closeCurrentChatOnce() {
+  if (_closed) {
+    print(
+      '[DM_FLUTTER_CLOSE_CHAT_ONCE_SKIPPED] '
+      'chatId=${widget.chat.chatId} reason=already_closed',
+    );
+    return;
   }
 
-  @override
-  void dispose() {
-    typingTimer?.cancel();
+  _closed = true;
 
-    if (typingSent) {
-      ref
-          .read(dmProvider.notifier)
-          .sendTyping(toUserId: widget.chat.peerUserId, isTyping: false);
-    }
+  final activeChatId = ref.read(dmProvider).activeChatId;
 
-    messageController.removeListener(_handleTyping);
-    messageController.dispose();
-    scrollController.dispose();
+  print(
+    '[DM_FLUTTER_CLOSE_CHAT_ONCE_START] '
+    'screenChatId=${widget.chat.chatId} '
+    'activeChatId=$activeChatId',
+  );
 
-    ref.read(dmProvider.notifier).closeChat();
+  ref.read(dmProvider.notifier).closeChat();
 
-    super.dispose();
+  print(
+    '[DM_FLUTTER_CLOSE_CHAT_ONCE_DONE] '
+    'screenChatId=${widget.chat.chatId}',
+  );
+}
+@override
+@override
+void dispose() {
+  print('[DM_FLUTTER_SCREEN_DISPOSE_START] chatId=${widget.chat.chatId}');
+
+  typingTimer?.cancel();
+
+  if (typingSent) {
+    print(
+      '[DM_FLUTTER_TYPING_STOP_ON_DISPOSE] '
+      'toUserId=${widget.chat.peerUserId}',
+    );
+
+    ref
+        .read(dmProvider.notifier)
+        .sendTyping(toUserId: widget.chat.peerUserId, isTyping: false);
   }
 
+  closeCurrentChatOnce();
+
+  messageController.removeListener(_handleTyping);
+  messageController.dispose();
+  scrollController.dispose();
+
+  print('[DM_FLUTTER_SCREEN_DISPOSE_DONE] chatId=${widget.chat.chatId}');
+
+  super.dispose();
+}
+  
   Color pageBackground(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -115,31 +174,80 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     });
   }
 
-  void _markUnreadIncomingSeen() {
-    final state = ref.read(dmProvider);
-    final messages = state.messagesFor(widget.chat.chatId);
+void _markUnreadIncomingSeen() {
+  final state = ref.read(dmProvider);
 
-    final incomingUnseen = messages
-        .where((message) {
-          if (message.isMine) return false;
-          if (message.isDeleted) return false;
-          if (message.status == 'seen') return false;
-          return message.messageId.isNotEmpty;
-        })
-        .map((message) => message.messageId)
-        .toList();
+  print(
+    '[DM_FLUTTER_MARK_SEEN_CHECK] '
+    'screenChatId=${widget.chat.chatId} '
+    'activeChatId=${state.activeChatId} '
+    'closed=$_closed',
+  );
 
-    if (incomingUnseen.isEmpty) return;
-
-    ref
-        .read(dmProvider.notifier)
-        .markSeen(
-          toUserId: widget.chat.peerUserId,
-          chatId: widget.chat.chatId,
-          messageIds: incomingUnseen,
-        );
+  if (_closed) {
+    print(
+      '[DM_FLUTTER_MARK_SEEN_BLOCKED_CLOSED] '
+      'screenChatId=${widget.chat.chatId}',
+    );
+    return;
   }
 
+  /*
+    مهم جدًا:
+    لا ترسل seen إلا لو هذه المحادثة هي المفتوحة حاليًا.
+  */
+  if (state.activeChatId != widget.chat.chatId) {
+    print(
+      '[DM_FLUTTER_MARK_SEEN_BLOCKED_NOT_ACTIVE] '
+      'screenChatId=${widget.chat.chatId} '
+      'activeChatId=${state.activeChatId}',
+    );
+    return;
+  }
+
+  final messages = state.messagesFor(widget.chat.chatId);
+
+  final incomingUnseen = messages
+      .where((message) {
+        if (message.isMine) return false;
+        if (message.isDeleted) return false;
+        if (message.status == 'seen') return false;
+        if (message.messageId.isEmpty) return false;
+
+        /*
+          لا ترسل seen لنفس الرسالة مرتين.
+        */
+        if (seenSentMessageIds.contains(message.messageId)) return false;
+
+        return true;
+      })
+      .map((message) => message.messageId)
+      .toList();
+
+  print(
+    '[DM_FLUTTER_MARK_SEEN_MESSAGES] '
+    'chatId=${widget.chat.chatId} '
+    'count=${incomingUnseen.length} '
+    'ids=$incomingUnseen',
+  );
+
+  if (incomingUnseen.isEmpty) return;
+
+  seenSentMessageIds.addAll(incomingUnseen);
+
+  ref.read(dmProvider.notifier).markSeen(
+        toUserId: widget.chat.peerUserId,
+        chatId: widget.chat.chatId,
+        messageIds: incomingUnseen,
+      );
+
+  print(
+    '[DM_FLUTTER_MARK_SEEN_SENT] '
+    'toUserId=${widget.chat.peerUserId} '
+    'chatId=${widget.chat.chatId} '
+    'ids=$incomingUnseen',
+  );
+}
   String formatTime(DateTime time) {
     final hour = time.hour > 12
         ? time.hour - 12
@@ -166,7 +274,61 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
         current.month != previous.month ||
         current.day != previous.day;
   }
+bool readBool(dynamic value) {
+  if (value == true) return true;
+  if (value?.toString() == 'true') return true;
+  return false;
+}
 
+bool isUserOnlineFromMap(Map<String, dynamic> user) {
+  final current = user['current']?.toString().trim() ?? '';
+
+  return current == '1' ||
+      current.toLowerCase() == 'online' ||
+      readBool(user['isOnline']);
+}
+
+Map<String, dynamic>? peerFriendMap() {
+  final usersState = ref.read(usersProvider);
+
+  for (final user in usersState.friends) {
+    final userId = user['userId']?.toString() ?? '';
+
+    if (userId == widget.chat.peerUserId) {
+      return user;
+    }
+  }
+
+  return null;
+}
+
+bool isPeerHidden() {
+  final user = peerFriendMap();
+
+  if (user == null) return false;
+
+  return readBool(user['hideActivityStatus']) ||
+      readBool(user['hide_activity_status']) ||
+      readBool(user['isManualOffline']) ||
+      readBool(user['is_manual_offline']);
+}
+
+bool canShowPeerActivity() {
+  final user = peerFriendMap();
+
+  if (user == null) return false;
+
+  return !isPeerHidden();
+}
+
+bool isPeerOnline() {
+  final user = peerFriendMap();
+
+  if (user == null) return false;
+  if (!canShowPeerActivity()) return false;
+
+  return isUserOnlineFromMap(user);
+}
   Future<void> sendTextMessage() async {
     final text = messageController.text.trim();
 
@@ -414,26 +576,79 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
   Widget build(BuildContext context) {
     final backgroundColor = pageBackground(context);
 
-    final dmState = ref.watch(dmProvider);
-    final messages = dmState.messagesFor(widget.chat.chatId);
-    final isPeerTyping = dmState.typingUserIds.contains(widget.chat.peerUserId);
+   final dmState = ref.watch(dmProvider);
+final usersState = ref.watch(usersProvider);
 
+final messages = dmState.messagesFor(widget.chat.chatId);
+if (messages.length != _lastMessagesCount) {
+  final oldCount = _lastMessagesCount;
+  final newCount = messages.length;
+
+  _lastMessagesCount = newCount;
+
+  print(
+    '[DM_FLUTTER_MESSAGES_COUNT_CHANGED] '
+    'chatId=${widget.chat.chatId} '
+    'old=$oldCount '
+    'new=$newCount',
+  );
+
+  if (newCount > oldCount) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      print(
+        '[DM_FLUTTER_SCROLL_ON_NEW_MESSAGE] '
+        'chatId=${widget.chat.chatId} '
+        'old=$oldCount '
+        'new=$newCount',
+      );
+
+      scrollToBottom();
+
+      /*
+        لو الرسالة الجديدة واردة لعلي وهو فاتح المحادثة،
+        نرسل seen ونلون العلامتين عند أحمد.
+      */
       _markUnreadIncomingSeen();
     });
+  }
+}
+final showPeerActivity = canShowPeerActivity();
+final isPeerTyping = showPeerActivity
+    ? dmState.typingUserIds.contains(widget.chat.peerUserId)
+    : false;
+final peerOnline = isPeerOnline();
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: Column(
+
+   return PopScope(
+  canPop: true,
+  onPopInvokedWithResult: (didPop, result) {
+    print(
+      '[DM_FLUTTER_POP_SCOPE] '
+      'didPop=$didPop '
+      'chatId=${widget.chat.chatId}',
+    );
+
+    closeCurrentChatOnce();
+  },
+  child: Scaffold(
+    backgroundColor: backgroundColor,
+    body: Column(
         children: [
-          _DmChatHeader(
-            chat: widget.chat,
-            isTyping: isPeerTyping,
-            onBack: () => Navigator.pop(context),
-            onProfileTap: () => openHeaderMenu('profile'),
-            onCallTap: () => showMessage('Calling...'),
-            onMenuSelect: openHeaderMenu,
-          ),
+       _DmChatHeader(
+  chat: widget.chat,
+  isTyping: isPeerTyping,
+  isOnline: peerOnline,
+onBack: () {
+  print('[DM_FLUTTER_HEADER_BACK_PRESSED] chatId=${widget.chat.chatId}');
+  closeCurrentChatOnce();
+  Navigator.pop(context);
+},
+  onProfileTap: () => openHeaderMenu('profile'),
+  onCallTap: () => showMessage('Calling...'),
+  onMenuSelect: openHeaderMenu,
+),
 
           Expanded(
             child: Container(
@@ -472,7 +687,7 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
             ),
           ),
 
-          _DmInputBar(
+                  _DmInputBar(
             controller: messageController,
             replyMessage: replyMessage,
             editingMessage: editingMessage,
@@ -483,13 +698,14 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
-
+}
 class _DmChatHeader extends StatelessWidget {
   final LocalChatModel chat;
   final bool isTyping;
+  final bool isOnline;
   final VoidCallback onBack;
   final VoidCallback onProfileTap;
   final VoidCallback onCallTap;
@@ -498,15 +714,24 @@ class _DmChatHeader extends StatelessWidget {
   const _DmChatHeader({
     required this.chat,
     required this.isTyping,
+    required this.isOnline,
     required this.onBack,
     required this.onProfileTap,
     required this.onCallTap,
     required this.onMenuSelect,
   });
 
+  String statusText() {
+    if (isTyping) return 'typing...';
+    if (isOnline) return 'Online now';
+    return 'Offline';
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    final activeStatus = isTyping || isOnline;
 
     return SafeArea(
       bottom: false,
@@ -532,26 +757,50 @@ class _DmChatHeader extends StatelessWidget {
               icon: const Icon(Icons.arrow_back_rounded),
             ),
 
-            GestureDetector(
-              onTap: onProfileTap,
-              child: CircleAvatar(
-                radius: R.size(context, 22),
-                backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
-                backgroundImage: chat.peerPhotoUrl.trim().isEmpty
-                    ? null
-                    : NetworkImage(chat.peerPhotoUrl),
-                child: chat.peerPhotoUrl.trim().isEmpty
-                    ? Text(
-                        chat.peerUsername.isEmpty
-                            ? '?'
-                            : chat.peerUsername.characters.first.toUpperCase(),
-                        style: TextStyle(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : null,
-              ),
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: onProfileTap,
+                  child: CircleAvatar(
+                    radius: R.size(context, 22),
+                    backgroundColor: colorScheme.primary.withValues(
+                      alpha: 0.12,
+                    ),
+                    backgroundImage: chat.peerPhotoUrl.trim().isEmpty
+                        ? null
+                        : NetworkImage(chat.peerPhotoUrl),
+                    child: chat.peerPhotoUrl.trim().isEmpty
+                        ? Text(
+                            chat.peerUsername.isEmpty
+                                ? '?'
+                                : chat.peerUsername.characters.first
+                                      .toUpperCase(),
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+
+                PositionedDirectional(
+                  end: R.size(context, 0),
+                  bottom: R.size(context, 0),
+                  child: Container(
+                    width: R.size(context, 11),
+                    height: R.size(context, 11),
+                    decoration: BoxDecoration(
+                      color: isOnline ? Colors.green : colorScheme.outline,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: colorScheme.surface,
+                        width: R.size(context, 2),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             SizedBox(width: R.size(context, 12)),
@@ -572,13 +821,15 @@ class _DmChatHeader extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+
                     SizedBox(height: R.size(context, 2)),
+
                     Text(
-                      isTyping ? 'typing...' : 'Private chat',
+                      statusText(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: isTyping
+                        color: activeStatus
                             ? colorScheme.primary
                             : colorScheme.onSurface.withValues(alpha: 0.55),
                         fontSize: R.sp(context, 12),
@@ -615,7 +866,6 @@ class _DmChatHeader extends StatelessWidget {
     );
   }
 }
-
 class _DmInputBar extends StatelessWidget {
   final TextEditingController controller;
   final LocalMessageModel? replyMessage;

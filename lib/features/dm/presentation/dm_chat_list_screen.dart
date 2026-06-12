@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/responsive.dart';
 import '../../settings/presentation/settings_screen.dart';
+import '../../users/logic/users_provider.dart';
 import '../data/local_chat_model.dart';
 import '../logic/dm_provider.dart';
 import 'dm_chat_screen.dart';
-
+import '../../auth/logic/auth_provider.dart';
+import '../../auth/presentation/login_screen.dart';
+import '../../notifications/presentation/notifications_screen.dart';
 class DmChatListScreen extends ConsumerStatefulWidget {
   final String myUserId;
 
@@ -27,6 +30,7 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
 
     Future.microtask(() {
       ref.read(dmProvider.notifier).loadChats();
+      ref.read(usersProvider.notifier).getFriends();
     });
   }
 
@@ -34,6 +38,32 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  bool readBool(dynamic value) {
+    if (value == true) return true;
+    if (value?.toString() == 'true') return true;
+    return false;
+  }
+
+  bool isUserOnlineFromMap(Map<String, dynamic> user) {
+    final current = user['current']?.toString().trim() ?? '';
+
+    return current == '1' ||
+        current.toLowerCase() == 'online' ||
+        readBool(user['isOnline']);
+  }
+
+  bool isChatPeerOnline(String peerUserId, List<Map<String, dynamic>> friends) {
+    for (final user in friends) {
+      final userId = user['userId']?.toString() ?? '';
+
+      if (userId == peerUserId) {
+        return isUserOnlineFromMap(user);
+      }
+    }
+
+    return false;
   }
 
   List<LocalChatModel> filterChats(List<LocalChatModel> chats) {
@@ -76,13 +106,15 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
     );
   }
 
-  void openNotifications() {
-    showMessage('Notifications');
-  }
-
-  void logout() {
-    showMessage('Logout');
-  }
+void openNotifications() {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+  );
+}
+void logout() {
+  ref.read(authProvider.notifier).logout();
+}
 
   Future<void> deleteChat(LocalChatModel chat) async {
     await ref.read(dmProvider.notifier).deleteChat(chat.chatId);
@@ -216,20 +248,47 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final dmState = ref.watch(dmProvider);
-    final chats = filterChats(dmState.chats);
+   final dmState = ref.watch(dmProvider);
+final usersState = ref.watch(usersProvider);
+final authState = ref.watch(authProvider);
 
+final myUsername = authState.username ?? '';
+final myPhotoUrl = authState.photoUrl ?? '';
+
+    final chats = filterChats(dmState.chats);
+ref.listen(authProvider, (previous, next) {
+  final wasLoggedIn = previous?.loggedIn == true;
+  final isLoggedOutNow = next.loggedIn == false;
+
+  if (wasLoggedIn && isLoggedOutNow) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  if (next.error != null && next.error!.isNotEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(next.error!),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+});
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          _ChatsHeader(
-            onAvatarTap: openProfile,
-            onNotificationTap: openNotifications,
-            onSettingsTap: openSettings,
-            onLogoutTap: logout,
-          ),
-
+    _ChatsHeader(
+  username: myUsername,
+  photoUrl: myPhotoUrl,
+  onAvatarTap: openProfile,
+  onNotificationTap: openNotifications,
+  onSettingsTap: openSettings,
+  onLogoutTap: logout,
+),
           _ChatsSearchBar(
             controller: searchController,
             onChanged: updateSearch,
@@ -241,8 +300,9 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
                 : chats.isEmpty
                 ? _EmptyChats(hasSearch: query.trim().isNotEmpty)
                 : RefreshIndicator(
-                    onRefresh: () {
-                      return ref.read(dmProvider.notifier).loadChats();
+                    onRefresh: () async {
+                      ref.read(usersProvider.notifier).getFriends();
+                      await ref.read(dmProvider.notifier).loadChats();
                     },
                     child: ListView.builder(
                       padding: EdgeInsets.only(
@@ -257,6 +317,11 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
 
                         final isTyping = dmState.typingUserIds.contains(
                           chat.peerUserId,
+                        );
+
+                        final isOnline = isChatPeerOnline(
+                          chat.peerUserId,
+                          usersState.friends,
                         );
 
                         return Dismissible(
@@ -313,6 +378,7 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
                             chat: chat,
                             time: formatTime(chat.lastMessageAt),
                             isTyping: isTyping,
+                            isOnline: isOnline,
                             onTap: () => openChat(chat),
                             onLongPress: () => showChatActions(chat),
                           ),
@@ -328,12 +394,16 @@ class _DmChatListScreenState extends ConsumerState<DmChatListScreen> {
 }
 
 class _ChatsHeader extends StatelessWidget {
+  final String username;
+  final String photoUrl;
   final VoidCallback onAvatarTap;
   final VoidCallback onNotificationTap;
   final VoidCallback onSettingsTap;
   final VoidCallback onLogoutTap;
 
   const _ChatsHeader({
+    required this.username,
+    required this.photoUrl,
     required this.onAvatarTap,
     required this.onNotificationTap,
     required this.onSettingsTap,
@@ -363,14 +433,26 @@ class _ChatsHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            GestureDetector(
-              onTap: onAvatarTap,
-              child: CircleAvatar(
-                radius: R.size(context, 22),
-                backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
-                child: Icon(Icons.person_rounded, color: colorScheme.primary),
-              ),
+          GestureDetector(
+  onTap: onAvatarTap,
+  child: CircleAvatar(
+    radius: R.size(context, 22),
+    backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
+    backgroundImage: photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl),
+    child: photoUrl.trim().isEmpty
+        ? Text(
+            username.trim().isEmpty
+                ? '?'
+                : username.characters.first.toUpperCase(),
+            style: TextStyle(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w900,
+              fontSize: R.sp(context, 16),
             ),
+          )
+        : null,
+  ),
+),
 
             SizedBox(width: R.size(context, 12)),
 
@@ -464,6 +546,7 @@ class _DmChatTile extends StatelessWidget {
   final LocalChatModel chat;
   final String time;
   final bool isTyping;
+  final bool isOnline;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -471,6 +554,7 @@ class _DmChatTile extends StatelessWidget {
     required this.chat,
     required this.time,
     required this.isTyping,
+    required this.isOnline,
     required this.onTap,
     required this.onLongPress,
   });
@@ -550,9 +634,7 @@ class _DmChatTile extends StatelessWidget {
                       width: R.size(context, 12),
                       height: R.size(context, 12),
                       decoration: BoxDecoration(
-                        color: isTyping
-                            ? colorScheme.primary
-                            : colorScheme.outline,
+                        color: isOnline ? Colors.green : colorScheme.outline,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: colorScheme.surface,

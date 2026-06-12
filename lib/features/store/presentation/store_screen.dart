@@ -5,6 +5,8 @@ import '../../../core/utils/responsive.dart';
 import '../../auth/logic/auth_provider.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../logic/store_provider.dart';
+import '../../auth/presentation/login_screen.dart';
+import '../../notifications/presentation/notifications_screen.dart';
 
 class StoreScreen extends ConsumerStatefulWidget {
   const StoreScreen({super.key});
@@ -32,10 +34,7 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
 
   void showMessage(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -105,7 +104,29 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
     final store = ref.watch(storeProvider);
     final auth = ref.watch(authProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final myUsername = auth.username ?? auth.user?['username']?.toString() ?? '';
+final myPhotoUrl = auth.photoUrl ?? auth.user?['photoUrl']?.toString() ?? '';
+    ref.listen(authProvider, (previous, next) {
+      final wasLoggedIn = previous?.loggedIn == true;
+      final isLoggedOutNow = next.loggedIn == false;
 
+      if (wasLoggedIn && isLoggedOutNow) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+
+      if (next.error != null && next.error!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
     ref.listen(storeProvider, (previous, next) {
       if (next.error != null && next.error!.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -138,14 +159,20 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          _StoreHeader(
-            coins: userPoints.toString(),
-            onAvatarTap: () => openSettings(context),
-            onNotificationTap: () => showMessage(context, 'Notifications'),
-            onSettingsTap: () => openSettings(context),
-            onLogoutTap: () => logout(context),
-          ),
-
+ _StoreHeader(
+  coins: userPoints.toString(),
+  username: myUsername,
+  photoUrl: myPhotoUrl,
+  onAvatarTap: () => openSettings(context),
+  onNotificationTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+  },
+  onSettingsTap: () => openSettings(context),
+  onLogoutTap: () => logout(context),
+),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -223,8 +250,9 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
                             backgroundColor: Colors.white,
                             foregroundColor: colorScheme.primary,
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(R.size(context, 999)),
+                              borderRadius: BorderRadius.circular(
+                                R.size(context, 999),
+                              ),
                             ),
                           ),
                           child: Text(
@@ -283,8 +311,10 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
                             final owned = store.isOwned(itemId);
                             final active = store.isActive(itemId);
                             final daysLeft = store.daysLeft(itemId);
-                            final hasActiveSameType =
-                                hasActiveItemOfType(type, store.inventory);
+                            final hasActiveSameType = hasActiveItemOfType(
+                              type,
+                              store.inventory,
+                            );
 
                             return _ColorStoreCard(
                               color: hexToColor(value),
@@ -342,9 +372,9 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
                           ),
                           loading: store.loading,
                           onTap: () {
-                            ref.read(storeProvider.notifier).buyItem(
-                                  item['itemId']?.toString() ?? '',
-                                );
+                            ref
+                                .read(storeProvider.notifier)
+                                .buyItem(item['itemId']?.toString() ?? '');
                           },
                         );
                       }),
@@ -370,19 +400,18 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
                             item['type']?.toString() ?? '',
                             item['value']?.toString() ?? '',
                           ),
-                          previewColor:
-                              item['value']?.toString() == 'gold'
-                                  ? const Color(0xFFF59E0B)
-                                  : colorScheme.primary,
+                          previewColor: item['value']?.toString() == 'gold'
+                              ? const Color(0xFFF59E0B)
+                              : colorScheme.primary,
                           hasActiveSameType: hasActiveItemOfType(
                             item['type']?.toString() ?? '',
                             store.inventory,
                           ),
                           loading: store.loading,
                           onTap: () {
-                            ref.read(storeProvider.notifier).buyItem(
-                                  item['itemId']?.toString() ?? '',
-                                );
+                            ref
+                                .read(storeProvider.notifier)
+                                .buyItem(item['itemId']?.toString() ?? '');
                           },
                         );
                       }),
@@ -400,6 +429,8 @@ class _StoreScreenState extends ConsumerState<StoreScreen> {
 
 class _StoreHeader extends StatelessWidget {
   final String coins;
+  final String username;
+  final String photoUrl;
   final VoidCallback onAvatarTap;
   final VoidCallback onNotificationTap;
   final VoidCallback onSettingsTap;
@@ -407,12 +438,13 @@ class _StoreHeader extends StatelessWidget {
 
   const _StoreHeader({
     required this.coins,
+    required this.username,
+    required this.photoUrl,
     required this.onAvatarTap,
     required this.onNotificationTap,
     required this.onSettingsTap,
     required this.onLogoutTap,
   });
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -428,19 +460,27 @@ class _StoreHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            InkWell(
-              onTap: onAvatarTap,
-              borderRadius: BorderRadius.circular(999),
-              child: CircleAvatar(
-                radius: R.size(context, 31),
-                backgroundColor: const Color(0xFFDDE7FF),
-                child: Icon(
-                  Icons.person_rounded,
-                  size: R.size(context, 33),
-                  color: colorScheme.primary,
-                ),
-              ),
+          InkWell(
+  onTap: onAvatarTap,
+  borderRadius: BorderRadius.circular(999),
+  child: CircleAvatar(
+    radius: R.size(context, 31),
+    backgroundColor: const Color(0xFFDDE7FF),
+    backgroundImage: photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl),
+    child: photoUrl.trim().isEmpty
+        ? Text(
+            username.trim().isEmpty
+                ? '?'
+                : username.characters.first.toUpperCase(),
+            style: TextStyle(
+              color: colorScheme.primary,
+              fontSize: R.sp(context, 24),
+              fontWeight: FontWeight.w900,
             ),
+          )
+        : null,
+  ),
+),
 
             SizedBox(width: R.size(context, 16)),
 
@@ -548,10 +588,7 @@ class _HeaderIcon extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _HeaderIcon({
-    required this.icon,
-    required this.onTap,
-  });
+  const _HeaderIcon({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -690,7 +727,9 @@ class _ColorStoreCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 elevation: 0,
                 padding: EdgeInsets.zero,
-                backgroundColor: active ? colorScheme.surfaceContainerHighest : color,
+                backgroundColor: active
+                    ? colorScheme.surfaceContainerHighest
+                    : color,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: colorScheme.surfaceContainerHighest,
                 disabledForegroundColor: colorScheme.onSurfaceVariant,
@@ -748,8 +787,8 @@ class _StoreItemCard extends StatelessWidget {
     final typeText = type == 'badge'
         ? 'Profile badge'
         : type == 'verification'
-            ? 'Account verification'
-            : 'Store item';
+        ? 'Account verification'
+        : 'Store item';
 
     if (active && daysLeft != null) {
       return '$typeText • $daysLeft days left';
@@ -874,11 +913,11 @@ class _StoreItemCard extends StatelessWidget {
                         foregroundColor: colorScheme.onPrimary,
                         disabledBackgroundColor:
                             colorScheme.surfaceContainerHighest,
-                        disabledForegroundColor:
-                            colorScheme.onSurfaceVariant,
+                        disabledForegroundColor: colorScheme.onSurfaceVariant,
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(R.size(context, 999)),
+                          borderRadius: BorderRadius.circular(
+                            R.size(context, 999),
+                          ),
                         ),
                       ),
                       child: Text(
