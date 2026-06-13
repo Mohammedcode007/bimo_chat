@@ -10,6 +10,14 @@ class RoomChatHeader extends StatelessWidget {
   final VoidCallback onRoomsMenuTap;
   final VoidCallback onUsersTap;
   final VoidCallback onUploadTap;
+
+  /*
+    الجديد:
+    زر بوست الغرفة.
+    حاليًا سيستخدمه الفرونت لفتح شاشة/نافذة إنشاء بوست فيديو لاحقًا.
+  */
+  final VoidCallback onPostTap;
+
   final ValueChanged<String> onMenuSelect;
 
   const RoomChatHeader({
@@ -20,6 +28,7 @@ class RoomChatHeader extends StatelessWidget {
     required this.onRoomsMenuTap,
     required this.onUsersTap,
     required this.onUploadTap,
+    required this.onPostTap,
     required this.onMenuSelect,
   });
 
@@ -107,11 +116,26 @@ class RoomChatHeader extends StatelessWidget {
               ),
             ),
 
+            /*
+              زر رفع ميديا عادي.
+            */
             _HeaderIcon(
               icon: Icons.cloud_upload_outlined,
               onTap: onUploadTap,
             ),
 
+            /*
+              الجديد:
+              زر بوست الغرفة.
+            */
+            _HeaderIcon(
+              icon: Icons.video_collection_rounded,
+              onTap: onPostTap,
+            ),
+
+            /*
+              قائمة مستخدمي الغرفة.
+            */
             _HeaderIcon(
               icon: Icons.groups_rounded,
               onTap: onUsersTap,
@@ -136,15 +160,27 @@ class RoomChatHeader extends StatelessWidget {
                     'favorite',
                     isFavorite ? 'Remove from favourite' : 'Add to favourite',
                   ),
+
+                  /*
+                    موجودة بالفعل:
+                    من هنا تفتح تعديل رسالة الترحيب.
+                  */
                   _menuItem(context, 'welcome', 'Welcome message'),
+
+                  /*
+                    ممكن لاحقًا تستخدمها لإعدادات الغرفة.
+                  */
                   _menuItem(context, 'settings', 'Settings'),
+
                   _menuItem(context, 'invitation', 'Room invitation'),
+
                   _menuItem(
                     context,
                     'report',
                     'Report Violation',
                     color: colorScheme.error,
                   ),
+
                   _menuItem(
                     context,
                     'leave',

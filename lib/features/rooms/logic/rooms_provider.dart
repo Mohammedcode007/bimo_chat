@@ -99,7 +99,22 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
       final handler = _s(data['handler']);
 
       print('📥 ROOM WS EVENT: $handler => $data');
+final directType = _s(data['type']);
+final directHandler = _s(data['handler']);
 
+if (handler == 'room:kicked' ||
+    directType == 'room:kicked' ||
+    directHandler == 'room:kicked') {
+  _handleRoomKicked(data);
+  return;
+}
+
+if (handler == 'room:banned' ||
+    directType == 'room:banned' ||
+    directHandler == 'room:banned') {
+  _handleRoomBanned(data);
+  return;
+}
       if (handler == RoomWsEvents.roomList) {
         _handleRoomList(data);
         return;
@@ -298,22 +313,32 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
       'newRole': newRole,
     });
   }
-
-  void banUser({
-    required String roomId,
-    required String targetUserId,
-    String targetUsername = '',
-    bool banIp = false,
-  }) {
-    _ws.send({
-      'handler': RoomWsHandlers.roomBanUser,
-      'roomId': roomId,
-      'targetUserId': targetUserId,
-      'targetUsername': targetUsername,
-      'banIp': banIp,
-    });
-  }
-
+void kickUser({
+  required String roomId,
+  required String targetUserId,
+  String targetUsername = '',
+}) {
+  _ws.send({
+    'handler': RoomWsHandlers.roomKick,
+    'roomId': roomId,
+    'targetUserId': targetUserId,
+    'targetUsername': targetUsername,
+  });
+}
+void banUser({
+  required String roomId,
+  required String targetUserId,
+  String targetUsername = '',
+  bool banIp = false,
+}) {
+  _ws.send({
+    'handler': RoomWsHandlers.roomBan,
+    'roomId': roomId,
+    'targetUserId': targetUserId,
+    'targetUsername': targetUsername,
+    'banIp': banIp,
+  });
+}
   void setPassword({
     required String roomId,
     required String password,
@@ -372,7 +397,33 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
       'value': value,
     });
   }
+void _handleRoomKicked(dynamic data) {
+  final map = _asMap(data);
+  final roomId = _s(map['roomId']);
+  final message = _s(map['message'], fallback: 'تم طردك من الغرفة');
 
+  if (roomId.isEmpty) return;
+
+  clearRoomLocalData(roomId);
+
+  state = state.copyWith(
+    error: message,
+  );
+}
+
+void _handleRoomBanned(dynamic data) {
+  final map = _asMap(data);
+  final roomId = _s(map['roomId']);
+  final message = _s(map['message'], fallback: 'أنت محظور من هذه الغرفة');
+
+  if (roomId.isEmpty) return;
+
+  clearRoomLocalData(roomId);
+
+  state = state.copyWith(
+    error: message,
+  );
+}
   void _handleRoomList(dynamic data) {
     final map = _asMap(data);
     final list = map['rooms'];

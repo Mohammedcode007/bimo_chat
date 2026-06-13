@@ -9,6 +9,18 @@ class RoomWsHandlers {
 
   static const roomRoleSet = 'room.role.set';
 
+  /*
+    الجديد:
+    يستخدم مع الباك الجديد.
+  */
+  static const roomKick = 'room.kick';
+  static const roomBan = 'room.ban';
+
+  /*
+    القديم:
+    اتركه مؤقتًا لو أي شاشة قديمة ما زالت تستخدمه.
+    لاحقًا بعد التأكد ممكن تحذفه.
+  */
   static const roomBanUser = 'room.ban.user';
 
   static const roomPasswordSet = 'room.password.set';
@@ -36,4 +48,12 @@ class RoomWsEvents {
   static const roomActiveCount = 'room.active_count.update';
 
   static const roomError = 'room.error';
+
+  /*
+    أحداث مباشرة من الباك للمستخدم المطرود أو المحظور.
+    هذه ليست handlers يرسلها الفرونت.
+    الفرونت فقط يستقبلها.
+  */
+  static const roomKicked = 'room:kicked';
+  static const roomBanned = 'room:banned';
 }

@@ -27,7 +27,8 @@ class RoomsScreen extends ConsumerStatefulWidget {
 
 class _RoomsScreenState extends ConsumerState<RoomsScreen> {
   RoomFilterType selectedFilter = RoomFilterType.public;
-
+ui.RoomModel? pendingOpenRoom;
+bool isOpeningRoom = false;
   @override
   void initState() {
     super.initState();
@@ -121,18 +122,70 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       MaterialPageRoute(builder: (_) => const RoomsSearchScreen()),
     );
   }
+String roomErrorText(String error) {
+  final value = error.trim();
+  final lower = value.toLowerCase();
 
-  void openRoom(ui.RoomModel room) {
-    ref.read(roomsProvider.notifier).joinRoom(roomId: room.id);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoomChatScreen(room: room),
-      ),
-    );
+  if (lower == 'room_banned' ||
+      lower == 'banned' ||
+      lower == 'you_are_banned' ||
+      lower == 'user_banned' ||
+      value == 'ROOM_BANNED' ||
+      value == 'BANNED') {
+    return 'أنت محظور من هذه الغرفة';
   }
 
+  if (lower == 'room_not_found') {
+    return 'الغرفة غير موجودة';
+  }
+
+  if (lower == 'room_password_required' ||
+      lower == 'password_required') {
+    return 'هذه الغرفة تحتاج كلمة مرور';
+  }
+
+  if (lower == 'invalid_room_password' ||
+      lower == 'wrong_password') {
+    return 'كلمة مرور الغرفة غير صحيحة';
+  }
+
+  if (lower == 'room_join_failed') {
+    return 'تعذر دخول الغرفة';
+  }
+
+  if (lower == 'room_not_joined') {
+    return 'يجب دخول الغرفة أولًا';
+  }
+
+if (value.isEmpty || lower == 'null' || lower == 'undefined') {
+  return 'حدث خطأ';
+}
+
+return value;
+}
+
+bool isRealRoomError(String? error) {
+  final value = (error ?? '').trim();
+
+  if (value.isEmpty) return false;
+
+  final lower = value.toLowerCase();
+
+  if (lower == 'null') return false;
+  if (lower == 'undefined') return false;
+  if (lower == 'none') return false;
+
+  return true;
+}
+
+void openRoom(ui.RoomModel room) {
+  if (isOpeningRoom) return;
+
+  pendingOpenRoom = room;
+  isOpeningRoom = true;
+
+  ref.read(roomsProvider.notifier).joinRoom(roomId: room.id);
+}
   void openSettings() {
     Navigator.push(
       context,
@@ -192,17 +245,49 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       }
     });
 
-    ref.listen(roomsProvider, (previous, next) {
-      if (next.error != null && next.error!.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
+ref.listen<RoomsState>(roomsProvider, (previous, next) {
+  final error = next.error;
 
+  if (isRealRoomError(error)) {
+    isOpeningRoom = false;
+    pendingOpenRoom = null;
+
+    final message = roomErrorText(error!);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          textDirection: TextDirection.rtl,
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    return;
+  }
+
+  final roomToOpen = pendingOpenRoom;
+
+  if (roomToOpen == null) return;
+
+  final joinedByActiveRoom = next.activeRoomId == roomToOpen.id;
+
+  final usersInRoom = next.usersByRoom[roomToOpen.id] ?? [];
+  final joinedByUsersList = usersInRoom.isNotEmpty;
+
+  if (!joinedByActiveRoom && !joinedByUsersList) return;
+
+  pendingOpenRoom = null;
+  isOpeningRoom = false;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => RoomChatScreen(room: roomToOpen),
+    ),
+  );
+}); 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(

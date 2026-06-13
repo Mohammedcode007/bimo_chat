@@ -850,7 +850,20 @@ RoomChatMessageModel messageFromLive(
       isOnline: user.isOnline,
     );
   }
+void openRoomPost() {
+  showMessage('Room post will be added soon');
 
+  /*
+    لاحقًا هنا ستفتح Dialog أو Screen لاختيار فيديو.
+    بعد تجهيز الباك والـ provider ترسل:
+    
+    ref.read(roomsProvider.notifier).createRoomPost(
+      roomId: widget.room.id,
+      videoUrl: videoUrl,
+      text: text,
+    );
+  */
+}
   void handleUserAction(RoomChatUserModel user, RoomUserAction action) {
     switch (action) {
       case RoomUserAction.message:
@@ -864,20 +877,22 @@ RoomChatMessageModel messageFromLive(
         );
         break;
 
-      case RoomUserAction.kick:
-        addSystemMessage('${me.name} kicked ${user.name}');
-        break;
+ case RoomUserAction.kick:
+  ref.read(roomsProvider.notifier).kickUser(
+        roomId: widget.room.id,
+        targetUserId: user.id,
+        targetUsername: user.name,
+      );
+  break;
 
-      case RoomUserAction.ban:
-        ref.read(roomsProvider.notifier).banUser(
-              roomId: widget.room.id,
-              targetUserId: user.id,
-              targetUsername: user.name,
-              banIp: false,
-            );
-
-        addSystemMessage('${me.name} banned ${user.name}');
-        break;
+case RoomUserAction.ban:
+  ref.read(roomsProvider.notifier).banUser(
+        roomId: widget.room.id,
+        targetUserId: user.id,
+        targetUsername: user.name,
+        banIp: false,
+      );
+  break;
 
   case RoomUserAction.setMember:
   ref.read(roomsProvider.notifier).setRole(
@@ -1338,14 +1353,16 @@ case RoomUserAction.removeRole:
       backgroundColor: chatBackgroundColor,
       body: Column(
         children: [
-          RoomChatHeader(
-            roomName: widget.room.name,
-            membersCount: activeCount,
-            onRoomsMenuTap: () => openActiveRoomsMenu(activeRooms),
-            onUsersTap: () => openUsersDialog(users),
-            onUploadTap: pickImage,
-            onMenuSelect: handleRoomMenu,
-          ),
+       RoomChatHeader(
+  roomName: widget.room.name,
+  membersCount: activeCount,
+  isFavorite: widget.room.isFavorite,
+  onRoomsMenuTap: () => openActiveRoomsMenu(activeRooms),
+  onUsersTap: () => openUsersDialog(users),
+  onUploadTap: pickImage,
+  onPostTap: openRoomPost,
+  onMenuSelect: handleRoomMenu,
+),
           if (activeVoicePath != null)
             RoomVoicePlayerBar(
               isPlaying: isPlayingVoice,
