@@ -1,14 +1,22 @@
 import 'dart:async';
-
+import 'dart:io';
+import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import '../../../core/utils/responsive.dart';
 import '../data/local_chat_model.dart';
 import '../data/local_message_model.dart';
 import '../logic/dm_provider.dart';
 import '../../users/logic/users_provider.dart';
+import '../../../core/utils/image_picker_helper.dart';
+
 class DmChatScreen extends ConsumerStatefulWidget {
   final LocalChatModel chat;
   final String myUserId;
@@ -22,104 +30,117 @@ class DmChatScreen extends ConsumerStatefulWidget {
 class _DmChatScreenState extends ConsumerState<DmChatScreen> {
   final messageController = TextEditingController();
   final scrollController = ScrollController();
+  final imagePicker = ImagePicker();
+  final audioRecorder = AudioRecorder();
+  final audioPlayer = AudioPlayer();
 
+  Timer? inputIdleTimer;
+
+  bool showImageButton = true;
+  bool recording = false;
+  bool uploadingMedia = false;
+  bool showEmojiPicker = false;
+  String? topAudioUrl;
+  bool topAudioPlaying = false;
   LocalMessageModel? replyMessage;
   LocalMessageModel? editingMessage;
 
-Timer? typingTimer;
-bool typingSent = false;
-int _lastMessagesCount = 0;
-/*
+  Timer? typingTimer;
+  bool typingSent = false;
+  int _lastMessagesCount = 0;
+  /*
   يمنع تكرار closeChat أكثر من مرة.
 */
-bool _closed = false;
+  bool _closed = false;
 
-/*
+  /*
   يمنع إرسال seen لنفس الرسائل أكثر من مرة.
 */
-final Set<String> seenSentMessageIds = {};
-@override
-@override
-void initState() {
-  super.initState();
+  final Set<String> seenSentMessageIds = {};
+  @override
+  void initState() {
+    super.initState();
 
-  Future.microtask(() async {
-    print('[DM_FLUTTER_INIT_OPEN_CHAT] chatId=${widget.chat.chatId}');
+    Future.microtask(() async {
+      print('[DM_FLUTTER_INIT_OPEN_CHAT] chatId=${widget.chat.chatId}');
 
-    ref.read(usersProvider.notifier).getFriends();
+      ref.read(usersProvider.notifier).getFriends();
 
-    await ref.read(dmProvider.notifier).openChat(widget.chat.chatId);
+      await ref.read(dmProvider.notifier).openChat(widget.chat.chatId);
 
-    final messages = ref.read(dmProvider).messagesFor(widget.chat.chatId);
-    _lastMessagesCount = messages.length;
+      final messages = ref.read(dmProvider).messagesFor(widget.chat.chatId);
+      _lastMessagesCount = messages.length;
 
-    print(
-      '[DM_FLUTTER_INIT_MESSAGES_COUNT] '
-      'chatId=${widget.chat.chatId} '
-      'count=$_lastMessagesCount',
-    );
+      print(
+        '[DM_FLUTTER_INIT_MESSAGES_COUNT] '
+        'chatId=${widget.chat.chatId} '
+        'count=$_lastMessagesCount',
+      );
 
-    _markUnreadIncomingSeen();
-    scrollToBottom(jump: true);
-  });
+      _markUnreadIncomingSeen();
+      scrollToBottom(jump: true);
+    });
 
-  messageController.addListener(_handleTyping);
-}
-void closeCurrentChatOnce() {
-  if (_closed) {
-    print(
-      '[DM_FLUTTER_CLOSE_CHAT_ONCE_SKIPPED] '
-      'chatId=${widget.chat.chatId} reason=already_closed',
-    );
-    return;
+    messageController.addListener(_handleTyping);
   }
 
-  _closed = true;
+  void closeCurrentChatOnce() {
+    if (_closed) {
+      print(
+        '[DM_FLUTTER_CLOSE_CHAT_ONCE_SKIPPED] '
+        'chatId=${widget.chat.chatId} reason=already_closed',
+      );
+      return;
+    }
 
-  final activeChatId = ref.read(dmProvider).activeChatId;
+    _closed = true;
 
-  print(
-    '[DM_FLUTTER_CLOSE_CHAT_ONCE_START] '
-    'screenChatId=${widget.chat.chatId} '
-    'activeChatId=$activeChatId',
-  );
+    final activeChatId = ref.read(dmProvider).activeChatId;
 
-  ref.read(dmProvider.notifier).closeChat();
-
-  print(
-    '[DM_FLUTTER_CLOSE_CHAT_ONCE_DONE] '
-    'screenChatId=${widget.chat.chatId}',
-  );
-}
-@override
-@override
-void dispose() {
-  print('[DM_FLUTTER_SCREEN_DISPOSE_START] chatId=${widget.chat.chatId}');
-
-  typingTimer?.cancel();
-
-  if (typingSent) {
     print(
-      '[DM_FLUTTER_TYPING_STOP_ON_DISPOSE] '
-      'toUserId=${widget.chat.peerUserId}',
+      '[DM_FLUTTER_CLOSE_CHAT_ONCE_START] '
+      'screenChatId=${widget.chat.chatId} '
+      'activeChatId=$activeChatId',
     );
 
-    ref
-        .read(dmProvider.notifier)
-        .sendTyping(toUserId: widget.chat.peerUserId, isTyping: false);
+    ref.read(dmProvider.notifier).closeChat();
+
+    print(
+      '[DM_FLUTTER_CLOSE_CHAT_ONCE_DONE] '
+      'screenChatId=${widget.chat.chatId}',
+    );
   }
 
-  closeCurrentChatOnce();
+  @override
+  void dispose() {
+    print('[DM_FLUTTER_SCREEN_DISPOSE_START] chatId=${widget.chat.chatId}');
 
-  messageController.removeListener(_handleTyping);
-  messageController.dispose();
-  scrollController.dispose();
+    typingTimer?.cancel();
 
-  print('[DM_FLUTTER_SCREEN_DISPOSE_DONE] chatId=${widget.chat.chatId}');
+    if (typingSent) {
+      print(
+        '[DM_FLUTTER_TYPING_STOP_ON_DISPOSE] '
+        'toUserId=${widget.chat.peerUserId}',
+      );
 
-  super.dispose();
-}
-  
+      ref
+          .read(dmProvider.notifier)
+          .sendTyping(toUserId: widget.chat.peerUserId, isTyping: false);
+    }
+
+    closeCurrentChatOnce();
+
+    messageController.removeListener(_handleTyping);
+    messageController.dispose();
+    scrollController.dispose();
+    inputIdleTimer?.cancel();
+    audioRecorder.dispose();
+    audioPlayer.dispose();
+    print('[DM_FLUTTER_SCREEN_DISPOSE_DONE] chatId=${widget.chat.chatId}');
+
+    super.dispose();
+  }
+
   Color pageBackground(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -151,6 +172,33 @@ void dispose() {
   void _handleTyping() {
     final text = messageController.text.trim();
 
+    if (text.isNotEmpty) {
+      if (showImageButton) {
+        setState(() {
+          showImageButton = false;
+        });
+      }
+
+      inputIdleTimer?.cancel();
+      inputIdleTimer = Timer(const Duration(seconds: 5), () {
+        if (!mounted) return;
+
+        if (messageController.text.trim().isEmpty) {
+          setState(() {
+            showImageButton = true;
+          });
+        }
+      });
+    } else {
+      inputIdleTimer?.cancel();
+
+      if (!showImageButton) {
+        setState(() {
+          showImageButton = true;
+        });
+      }
+    }
+
     if (editingMessage != null) return;
 
     if (text.isNotEmpty && !typingSent) {
@@ -174,80 +222,123 @@ void dispose() {
     });
   }
 
-void _markUnreadIncomingSeen() {
-  final state = ref.read(dmProvider);
+  Future<void> openTopAudioPlayer(String url) async {
+    if (url.trim().isEmpty) return;
 
-  print(
-    '[DM_FLUTTER_MARK_SEEN_CHECK] '
-    'screenChatId=${widget.chat.chatId} '
-    'activeChatId=${state.activeChatId} '
-    'closed=$_closed',
-  );
-
-  if (_closed) {
-    print(
-      '[DM_FLUTTER_MARK_SEEN_BLOCKED_CLOSED] '
-      'screenChatId=${widget.chat.chatId}',
-    );
-    return;
+    setState(() {
+      topAudioUrl = url;
+      topAudioPlaying = false;
+    });
   }
 
-  /*
+  Future<void> toggleTopAudio() async {
+    final url = topAudioUrl;
+
+    if (url == null || url.trim().isEmpty) return;
+
+    if (topAudioPlaying) {
+      await audioPlayer.pause();
+
+      setState(() {
+        topAudioPlaying = false;
+      });
+
+      return;
+    }
+
+    await audioPlayer.play(UrlSource(url));
+
+    setState(() {
+      topAudioPlaying = true;
+    });
+  }
+
+  Future<void> closeTopAudio() async {
+    await audioPlayer.stop();
+
+    setState(() {
+      topAudioUrl = null;
+      topAudioPlaying = false;
+    });
+  }
+
+  void _markUnreadIncomingSeen() {
+    final state = ref.read(dmProvider);
+
+    print(
+      '[DM_FLUTTER_MARK_SEEN_CHECK] '
+      'screenChatId=${widget.chat.chatId} '
+      'activeChatId=${state.activeChatId} '
+      'closed=$_closed',
+    );
+
+    if (_closed) {
+      print(
+        '[DM_FLUTTER_MARK_SEEN_BLOCKED_CLOSED] '
+        'screenChatId=${widget.chat.chatId}',
+      );
+      return;
+    }
+
+    /*
     مهم جدًا:
     لا ترسل seen إلا لو هذه المحادثة هي المفتوحة حاليًا.
   */
-  if (state.activeChatId != widget.chat.chatId) {
-    print(
-      '[DM_FLUTTER_MARK_SEEN_BLOCKED_NOT_ACTIVE] '
-      'screenChatId=${widget.chat.chatId} '
-      'activeChatId=${state.activeChatId}',
-    );
-    return;
-  }
+    if (state.activeChatId != widget.chat.chatId) {
+      print(
+        '[DM_FLUTTER_MARK_SEEN_BLOCKED_NOT_ACTIVE] '
+        'screenChatId=${widget.chat.chatId} '
+        'activeChatId=${state.activeChatId}',
+      );
+      return;
+    }
 
-  final messages = state.messagesFor(widget.chat.chatId);
+    final messages = state.messagesFor(widget.chat.chatId);
 
-  final incomingUnseen = messages
-      .where((message) {
-        if (message.isMine) return false;
-        if (message.isDeleted) return false;
-        if (message.status == 'seen') return false;
-        if (message.messageId.isEmpty) return false;
+    final incomingUnseen = messages
+        .where((message) {
+          if (message.isMine) return false;
+          if (message.isDeleted) return false;
+          if (message.status == 'seen') return false;
+          if (message.messageId.isEmpty) return false;
 
-        /*
+          /*
           لا ترسل seen لنفس الرسالة مرتين.
         */
-        if (seenSentMessageIds.contains(message.messageId)) return false;
+          if (seenSentMessageIds.contains(message.messageId)) return false;
 
-        return true;
-      })
-      .map((message) => message.messageId)
-      .toList();
+          return true;
+        })
+        .map((message) => message.messageId)
+        .toList();
 
-  print(
-    '[DM_FLUTTER_MARK_SEEN_MESSAGES] '
-    'chatId=${widget.chat.chatId} '
-    'count=${incomingUnseen.length} '
-    'ids=$incomingUnseen',
-  );
+    print(
+      '[DM_FLUTTER_MARK_SEEN_MESSAGES] '
+      'chatId=${widget.chat.chatId} '
+      'count=${incomingUnseen.length} '
+      'ids=$incomingUnseen',
+    );
 
-  if (incomingUnseen.isEmpty) return;
+    if (incomingUnseen.isEmpty) return;
 
-  seenSentMessageIds.addAll(incomingUnseen);
+    seenSentMessageIds.addAll(incomingUnseen);
 
-  ref.read(dmProvider.notifier).markSeen(
-        toUserId: widget.chat.peerUserId,
-        chatId: widget.chat.chatId,
-        messageIds: incomingUnseen,
-      );
+    ref
+        .read(dmProvider.notifier)
+        .markSeen(
+          toUserId: widget.chat.peerUserId,
+          chatId: widget.chat.chatId,
+          messageIds: incomingUnseen,
+        );
 
-  print(
-    '[DM_FLUTTER_MARK_SEEN_SENT] '
-    'toUserId=${widget.chat.peerUserId} '
-    'chatId=${widget.chat.chatId} '
-    'ids=$incomingUnseen',
-  );
-}
+    print(
+      '[DM_FLUTTER_MARK_SEEN_SENT] '
+      'toUserId=${widget.chat.peerUserId} '
+      'chatId=${widget.chat.chatId} '
+      'ids=$incomingUnseen',
+    );
+  }
+
   String formatTime(DateTime time) {
     final hour = time.hour > 12
         ? time.hour - 12
@@ -274,61 +365,63 @@ void _markUnreadIncomingSeen() {
         current.month != previous.month ||
         current.day != previous.day;
   }
-bool readBool(dynamic value) {
-  if (value == true) return true;
-  if (value?.toString() == 'true') return true;
-  return false;
-}
 
-bool isUserOnlineFromMap(Map<String, dynamic> user) {
-  final current = user['current']?.toString().trim() ?? '';
-
-  return current == '1' ||
-      current.toLowerCase() == 'online' ||
-      readBool(user['isOnline']);
-}
-
-Map<String, dynamic>? peerFriendMap() {
-  final usersState = ref.read(usersProvider);
-
-  for (final user in usersState.friends) {
-    final userId = user['userId']?.toString() ?? '';
-
-    if (userId == widget.chat.peerUserId) {
-      return user;
-    }
+  bool readBool(dynamic value) {
+    if (value == true) return true;
+    if (value?.toString() == 'true') return true;
+    return false;
   }
 
-  return null;
-}
+  bool isUserOnlineFromMap(Map<String, dynamic> user) {
+    final current = user['current']?.toString().trim() ?? '';
 
-bool isPeerHidden() {
-  final user = peerFriendMap();
+    return current == '1' ||
+        current.toLowerCase() == 'online' ||
+        readBool(user['isOnline']);
+  }
 
-  if (user == null) return false;
+  Map<String, dynamic>? peerFriendMap() {
+    final usersState = ref.read(usersProvider);
 
-  return readBool(user['hideActivityStatus']) ||
-      readBool(user['hide_activity_status']) ||
-      readBool(user['isManualOffline']) ||
-      readBool(user['is_manual_offline']);
-}
+    for (final user in usersState.friends) {
+      final userId = user['userId']?.toString() ?? '';
 
-bool canShowPeerActivity() {
-  final user = peerFriendMap();
+      if (userId == widget.chat.peerUserId) {
+        return user;
+      }
+    }
 
-  if (user == null) return false;
+    return null;
+  }
 
-  return !isPeerHidden();
-}
+  bool isPeerHidden() {
+    final user = peerFriendMap();
 
-bool isPeerOnline() {
-  final user = peerFriendMap();
+    if (user == null) return false;
 
-  if (user == null) return false;
-  if (!canShowPeerActivity()) return false;
+    return readBool(user['hideActivityStatus']) ||
+        readBool(user['hide_activity_status']) ||
+        readBool(user['isManualOffline']) ||
+        readBool(user['is_manual_offline']);
+  }
 
-  return isUserOnlineFromMap(user);
-}
+  bool canShowPeerActivity() {
+    final user = peerFriendMap();
+
+    if (user == null) return false;
+
+    return !isPeerHidden();
+  }
+
+  bool isPeerOnline() {
+    final user = peerFriendMap();
+
+    if (user == null) return false;
+    if (!canShowPeerActivity()) return false;
+
+    return isUserOnlineFromMap(user);
+  }
+
   Future<void> sendTextMessage() async {
     final text = messageController.text.trim();
 
@@ -386,6 +479,139 @@ bool isPeerOnline() {
     scrollToBottom();
   }
 
+  Future<void> toggleRecordVoice() async {
+    if (uploadingMedia) return;
+
+    /*
+    لو التسجيل شغال:
+    نوقف التسجيل، نحول الملف base64، ونرسله للباك.
+  */
+    if (recording) {
+      final path = await audioRecorder.stop();
+
+      setState(() {
+        recording = false;
+        uploadingMedia = true;
+      });
+
+      try {
+        if (path == null || path.trim().isEmpty) return;
+
+        final file = File(path);
+
+        if (!await file.exists()) {
+          showMessage('Voice file not found');
+          return;
+        }
+
+        final bytes = await file.readAsBytes();
+        final base64Audio = base64Encode(bytes);
+        final sizeBytes = await file.length();
+
+        final mediaBase64 = 'data:audio/m4a;base64,$base64Audio';
+
+        await ref
+            .read(dmProvider.notifier)
+            .sendMediaBase64Message(
+              myUserId: widget.myUserId,
+              peerUserId: widget.chat.peerUserId,
+              peerUsername: widget.chat.peerUsername,
+              peerPhotoUrl: widget.chat.peerPhotoUrl,
+              type: 'audio',
+              mediaBase64: mediaBase64,
+              fileName: 'voice.m4a',
+              mimeType: 'audio/m4a',
+              sizeBytes: sizeBytes,
+            );
+
+        scrollToBottom();
+      } catch (error) {
+        print('[DM_VOICE_BASE64_ERROR] $error');
+        showMessage('Voice upload failed');
+      } finally {
+        if (mounted) {
+          setState(() {
+            uploadingMedia = false;
+          });
+        }
+      }
+
+      return;
+    }
+
+    /*
+    لو التسجيل غير شغال:
+    نبدأ التسجيل.
+  */
+    final hasPermission = await audioRecorder.hasPermission();
+
+    if (!hasPermission) {
+      showMessage('Microphone permission denied');
+      return;
+    }
+
+    final dir = await getTemporaryDirectory();
+
+    final path =
+        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+    await audioRecorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 64000,
+        sampleRate: 44100,
+      ),
+      path: path,
+    );
+
+    setState(() {
+      recording = true;
+    });
+  }
+
+  Future<void> pickAndSendImageOrGif() async {
+    if (uploadingMedia) return;
+
+    setState(() {
+      uploadingMedia = true;
+    });
+
+    try {
+      final base64 = await ImagePickerHelper.pickImageAsBase64(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1400,
+        maxHeight: 1400,
+      );
+
+      if (base64 == null) return;
+
+      await ref
+          .read(dmProvider.notifier)
+          .sendMediaBase64Message(
+            myUserId: widget.myUserId,
+            peerUserId: widget.chat.peerUserId,
+            peerUsername: widget.chat.peerUsername,
+            peerPhotoUrl: widget.chat.peerPhotoUrl,
+            type: 'image',
+            mediaBase64: base64,
+            fileName: 'chat_image.jpg',
+            mimeType: 'image/jpeg',
+          );
+
+      scrollToBottom();
+    } catch (error) {
+      print('[DM_PICK_IMAGE_BASE64_ERROR] $error');
+      showMessage('Image upload failed');
+    } finally {
+      if (mounted) {
+        setState(() {
+          uploadingMedia = false;
+        });
+      }
+    }
+  }
+
   void startReply(LocalMessageModel message) {
     if (message.isDeleted) return;
 
@@ -441,6 +667,35 @@ bool isPeerOnline() {
   Future<void> clearChatMessages() async {
     await ref.read(dmProvider.notifier).clearChatMessages(widget.chat.chatId);
     showMessage('Chat cleared');
+  }
+
+  void openImageViewer(String url) {
+    if (url.trim().isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: [
+              InteractiveViewer(
+                child: Center(child: Image.network(url, fit: BoxFit.contain)),
+              ),
+              PositionedDirectional(
+                top: 8,
+                end: 8,
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> deleteChat() async {
@@ -550,6 +805,14 @@ bool isPeerOnline() {
     }
   }
 
+  void toggleEmojiPicker() {
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      showEmojiPicker = !showEmojiPicker;
+    });
+  }
+
   void showMessage(String text) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -576,132 +839,189 @@ bool isPeerOnline() {
   Widget build(BuildContext context) {
     final backgroundColor = pageBackground(context);
 
-   final dmState = ref.watch(dmProvider);
-final usersState = ref.watch(usersProvider);
+    final dmState = ref.watch(dmProvider);
+    final usersState = ref.watch(usersProvider);
 
-final messages = dmState.messagesFor(widget.chat.chatId);
-if (messages.length != _lastMessagesCount) {
-  final oldCount = _lastMessagesCount;
-  final newCount = messages.length;
+    final messages = dmState.messagesFor(widget.chat.chatId);
+    if (messages.length != _lastMessagesCount) {
+      final oldCount = _lastMessagesCount;
+      final newCount = messages.length;
 
-  _lastMessagesCount = newCount;
-
-  print(
-    '[DM_FLUTTER_MESSAGES_COUNT_CHANGED] '
-    'chatId=${widget.chat.chatId} '
-    'old=$oldCount '
-    'new=$newCount',
-  );
-
-  if (newCount > oldCount) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      _lastMessagesCount = newCount;
 
       print(
-        '[DM_FLUTTER_SCROLL_ON_NEW_MESSAGE] '
+        '[DM_FLUTTER_MESSAGES_COUNT_CHANGED] '
         'chatId=${widget.chat.chatId} '
         'old=$oldCount '
         'new=$newCount',
       );
 
-      scrollToBottom();
+      if (newCount > oldCount) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
 
-      /*
+          print(
+            '[DM_FLUTTER_SCROLL_ON_NEW_MESSAGE] '
+            'chatId=${widget.chat.chatId} '
+            'old=$oldCount '
+            'new=$newCount',
+          );
+
+          scrollToBottom();
+
+          /*
         لو الرسالة الجديدة واردة لعلي وهو فاتح المحادثة،
         نرسل seen ونلون العلامتين عند أحمد.
       */
-      _markUnreadIncomingSeen();
-    });
+          _markUnreadIncomingSeen();
+        });
+      }
+    }
+    final showPeerActivity = canShowPeerActivity();
+    final isPeerTyping = showPeerActivity
+        ? dmState.typingUserIds.contains(widget.chat.peerUserId)
+        : false;
+    final peerOnline = isPeerOnline();
+
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        print(
+          '[DM_FLUTTER_POP_SCOPE] '
+          'didPop=$didPop '
+          'chatId=${widget.chat.chatId}',
+        );
+
+        closeCurrentChatOnce();
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: Column(
+          children: [
+            _DmChatHeader(
+              chat: widget.chat,
+              isTyping: isPeerTyping,
+              isOnline: peerOnline,
+              onBack: () {
+                print(
+                  '[DM_FLUTTER_HEADER_BACK_PRESSED] chatId=${widget.chat.chatId}',
+                );
+                closeCurrentChatOnce();
+                Navigator.pop(context);
+              },
+              onProfileTap: () => openHeaderMenu('profile'),
+              onCallTap: () => showMessage('Calling...'),
+              onMenuSelect: openHeaderMenu,
+            ),
+            if (topAudioUrl != null)
+              _TopAudioPlayer(
+                playing: topAudioPlaying,
+                onPlayPause: toggleTopAudio,
+                onClose: closeTopAudio,
+              ),
+            Expanded(
+              child: Container(
+                color: backgroundColor,
+                child: messages.isEmpty
+                    ? _EmptyChat(peerUsername: widget.chat.peerUsername)
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: EdgeInsetsDirectional.fromSTEB(
+                          R.size(context, 18),
+                          R.size(context, 12),
+                          R.size(context, 18),
+                          R.size(context, 12),
+                        ),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final message = messages[index];
+
+                          return Column(
+                            children: [
+                              if (shouldShowDate(messages, index))
+                                _DateChip(text: formatDate(message.createdAt)),
+
+                              _MessageBubble(
+                                message: message,
+                                time: formatTime(message.createdAt),
+                                onTap: () => openMessageOptions(message),
+                                onReply: () => startReply(message),
+                                onImageTap: (url) => openImageViewer(url),
+                                onAudioTap: (url) => openTopAudioPlayer(url),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+              ),
+            ),
+
+            _DmInputBar(
+              controller: messageController,
+              replyMessage: replyMessage,
+              editingMessage: editingMessage,
+              onCancelReplyOrEdit: cancelReplyOrEdit,
+              onSend: sendTextMessage,
+              onPickImage: pickAndSendImageOrGif,
+              onRecord: toggleRecordVoice,
+              onEmojiTap: toggleEmojiPicker,
+              onInputTap: () {
+                if (showEmojiPicker) {
+                  setState(() {
+                    showEmojiPicker = false;
+                  });
+                }
+              },
+              showImageButton: showImageButton,
+              recording: recording,
+              uploading: uploadingMedia,
+            ),
+            if (showEmojiPicker)
+              SizedBox(
+                height: R.size(context, 280),
+                child: EmojiPicker(
+                  textEditingController: messageController,
+                  onEmojiSelected: (category, emoji) {
+                    setState(() {
+                      showImageButton = false;
+                    });
+                  },
+                  config: Config(
+                    height: R.size(context, 280),
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      emojiSizeMax: R.size(context, 28),
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                    ),
+                    categoryViewConfig: CategoryViewConfig(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      iconColor: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.55),
+                      iconColorSelected: Theme.of(context).colorScheme.primary,
+                      indicatorColor: Theme.of(context).colorScheme.primary,
+                    ),
+                    bottomActionBarConfig: BottomActionBarConfig(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      buttonColor: Theme.of(context).colorScheme.surface,
+                      buttonIconColor: Theme.of(context).colorScheme.primary,
+                    ),
+                    searchViewConfig: SearchViewConfig(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      buttonIconColor: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
-final showPeerActivity = canShowPeerActivity();
-final isPeerTyping = showPeerActivity
-    ? dmState.typingUserIds.contains(widget.chat.peerUserId)
-    : false;
-final peerOnline = isPeerOnline();
 
-
-   return PopScope(
-  canPop: true,
-  onPopInvokedWithResult: (didPop, result) {
-    print(
-      '[DM_FLUTTER_POP_SCOPE] '
-      'didPop=$didPop '
-      'chatId=${widget.chat.chatId}',
-    );
-
-    closeCurrentChatOnce();
-  },
-  child: Scaffold(
-    backgroundColor: backgroundColor,
-    body: Column(
-        children: [
-       _DmChatHeader(
-  chat: widget.chat,
-  isTyping: isPeerTyping,
-  isOnline: peerOnline,
-onBack: () {
-  print('[DM_FLUTTER_HEADER_BACK_PRESSED] chatId=${widget.chat.chatId}');
-  closeCurrentChatOnce();
-  Navigator.pop(context);
-},
-  onProfileTap: () => openHeaderMenu('profile'),
-  onCallTap: () => showMessage('Calling...'),
-  onMenuSelect: openHeaderMenu,
-),
-
-          Expanded(
-            child: Container(
-              color: backgroundColor,
-              child: messages.isEmpty
-                  ? _EmptyChat(peerUsername: widget.chat.peerUsername)
-                  : ListView.builder(
-                      controller: scrollController,
-                      padding: EdgeInsetsDirectional.fromSTEB(
-                        R.size(context, 18),
-                        R.size(context, 12),
-                        R.size(context, 18),
-                        R.size(context, 12),
-                      ),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final message = messages[index];
-
-                        return Column(
-                          children: [
-                            if (shouldShowDate(messages, index))
-                              _DateChip(text: formatDate(message.createdAt)),
-
-                            _MessageBubble(
-                              message: message,
-                              time: formatTime(message.createdAt),
-                              onTap: () => openMessageOptions(message),
-                              onReply: () => startReply(message),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-            ),
-          ),
-
-                  _DmInputBar(
-            controller: messageController,
-            replyMessage: replyMessage,
-            editingMessage: editingMessage,
-            onCancelReplyOrEdit: cancelReplyOrEdit,
-            onSend: sendTextMessage,
-            onPickImage: showMediaComingSoon,
-            onRecord: showMediaComingSoon,
-          ),
-        ],
-      ),
-    ),
-  );
-}
-}
 class _DmChatHeader extends StatelessWidget {
   final LocalChatModel chat;
   final bool isTyping;
@@ -866,6 +1186,7 @@ class _DmChatHeader extends StatelessWidget {
     );
   }
 }
+
 class _DmInputBar extends StatelessWidget {
   final TextEditingController controller;
   final LocalMessageModel? replyMessage;
@@ -874,7 +1195,11 @@ class _DmInputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onPickImage;
   final VoidCallback onRecord;
-
+  final VoidCallback onEmojiTap;
+  final VoidCallback onInputTap;
+  final bool showImageButton;
+  final bool recording;
+  final bool uploading;
   const _DmInputBar({
     required this.controller,
     required this.replyMessage,
@@ -883,6 +1208,11 @@ class _DmInputBar extends StatelessWidget {
     required this.onSend,
     required this.onPickImage,
     required this.onRecord,
+    required this.onInputTap,
+    required this.onEmojiTap,
+    required this.showImageButton,
+    required this.recording,
+    required this.uploading,
   });
 
   @override
@@ -959,10 +1289,15 @@ class _DmInputBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 IconButton(
-                  onPressed: onPickImage,
-                  icon: const Icon(Icons.image_rounded),
+                  onPressed: uploading ? null : onEmojiTap,
+                  icon: const Icon(Icons.emoji_emotions_outlined),
                 ),
 
+                if (showImageButton && !isEditing)
+                  IconButton(
+                    onPressed: uploading ? null : onPickImage,
+                    icon: const Icon(Icons.image_rounded),
+                  ),
                 Expanded(
                   child: Container(
                     constraints: BoxConstraints(
@@ -982,6 +1317,7 @@ class _DmInputBar extends StatelessWidget {
                       minLines: 1,
                       maxLines: 5,
                       textInputAction: TextInputAction.newline,
+                      onTap: onInputTap,
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         hintText: 'Message',
@@ -999,16 +1335,31 @@ class _DmInputBar extends StatelessWidget {
 
                     if (!hasText && !isEditing) {
                       return IconButton(
-                        onPressed: onRecord,
-                        icon: const Icon(Icons.mic_rounded),
+                        onPressed: uploading ? null : onRecord,
+                        icon: Icon(
+                          recording
+                              ? Icons.stop_circle_rounded
+                              : Icons.mic_rounded,
+                          color: recording ? Colors.redAccent : null,
+                        ),
                       );
                     }
 
                     return IconButton.filled(
-                      onPressed: onSend,
-                      icon: Icon(
-                        isEditing ? Icons.check_rounded : Icons.send_rounded,
-                      ),
+                      onPressed: uploading ? null : onSend,
+                      icon: uploading
+                          ? SizedBox(
+                              width: R.size(context, 17),
+                              height: R.size(context, 17),
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Icon(
+                              isEditing
+                                  ? Icons.check_rounded
+                                  : Icons.send_rounded,
+                            ),
                     );
                   },
                 ),
@@ -1026,12 +1377,16 @@ class _MessageBubble extends StatelessWidget {
   final String time;
   final VoidCallback onTap;
   final VoidCallback onReply;
+  final ValueChanged<String> onImageTap;
+  final ValueChanged<String> onAudioTap;
 
   const _MessageBubble({
     required this.message,
     required this.time,
     required this.onTap,
     required this.onReply,
+    required this.onImageTap,
+    required this.onAudioTap,
   });
 
   @override
@@ -1091,8 +1446,12 @@ class _MessageBubble extends StatelessWidget {
               if (message.shared != null)
                 _SharedPreview(shared: message.shared!, isMine: isMine),
 
-              _MessageContent(message: message, textColor: textColor),
-
+              _MessageContent(
+                message: message,
+                textColor: textColor,
+                onImageTap: onImageTap,
+                onAudioTap: onAudioTap,
+              ),
               SizedBox(height: R.size(context, 4)),
 
               Row(
@@ -1126,9 +1485,15 @@ class _MessageBubble extends StatelessWidget {
 class _MessageContent extends StatelessWidget {
   final LocalMessageModel message;
   final Color textColor;
+  final ValueChanged<String> onImageTap;
+  final ValueChanged<String> onAudioTap;
 
-  const _MessageContent({required this.message, required this.textColor});
-
+  const _MessageContent({
+    required this.message,
+    required this.textColor,
+    required this.onImageTap,
+    required this.onAudioTap,
+  });
   @override
   Widget build(BuildContext context) {
     if (message.isDeleted) {
@@ -1157,6 +1522,82 @@ class _MessageContent extends StatelessWidget {
     }
 
     if (message.type == 'image') {
+      final url = message.media?['url']?.toString() ?? '';
+      final base64 = message.media?['base64']?.toString() ?? '';
+
+      if (url.trim().isNotEmpty) {
+        return GestureDetector(
+          onTap: () => onImageTap(url),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(R.size(context, 12)),
+            child: Image.network(
+              url,
+              width: R.size(context, 210),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) {
+                return _MediaBox(
+                  icon: Icons.image_rounded,
+                  title: 'Photo',
+                  textColor: textColor,
+                );
+              },
+            ),
+          ),
+        );
+      }
+
+      if (base64.trim().isNotEmpty) {
+        try {
+          final cleanBase64 = base64.contains(',')
+              ? base64.split(',').last
+              : base64;
+
+          final bytes = base64Decode(cleanBase64);
+
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(R.size(context, 12)),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.memory(
+                  bytes,
+                  width: R.size(context, 210),
+                  fit: BoxFit.cover,
+                ),
+                PositionedDirectional(
+                  bottom: R.size(context, 8),
+                  end: R.size(context, 8),
+                  child: Container(
+                    padding: EdgeInsetsDirectional.symmetric(
+                      horizontal: R.size(context, 8),
+                      vertical: R.size(context, 4),
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'Sending...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: R.sp(context, 10),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } catch (_) {
+          return _MediaBox(
+            icon: Icons.image_rounded,
+            title: 'Photo',
+            textColor: textColor,
+          );
+        }
+      }
+
       return _MediaBox(
         icon: Icons.image_rounded,
         title: 'Photo',
@@ -1173,10 +1614,46 @@ class _MessageContent extends StatelessWidget {
     }
 
     if (message.type == 'audio') {
-      return _MediaBox(
-        icon: Icons.play_arrow_rounded,
-        title: 'Voice message',
-        textColor: textColor,
+      final url = message.media?['url']?.toString() ?? '';
+
+      return InkWell(
+        onTap: url.trim().isEmpty ? null : () => onAudioTap(url),
+        borderRadius: BorderRadius.circular(R.size(context, 12)),
+        child: Container(
+          constraints: BoxConstraints(minWidth: R.size(context, 145)),
+          padding: EdgeInsetsDirectional.symmetric(
+            horizontal: R.size(context, 10),
+            vertical: R.size(context, 9),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(R.size(context, 12)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.mic_rounded,
+                color: textColor,
+                size: R.size(context, 18),
+              ),
+              SizedBox(width: R.size(context, 7)),
+              Text(
+                'Voice message ',
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                url.trim().isEmpty ? 'Sending...' : 'Play',
+                style: TextStyle(
+                  color: url.trim().isEmpty
+                      ? textColor.withValues(alpha: 0.65)
+                      : Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -1486,6 +1963,73 @@ class _MessageOptionTile extends StatelessWidget {
         style: TextStyle(color: itemColor, fontWeight: FontWeight.w700),
       ),
       onTap: onTap,
+    );
+  }
+}
+
+class _TopAudioPlayer extends StatelessWidget {
+  final bool playing;
+  final VoidCallback onPlayPause;
+  final VoidCallback onClose;
+
+  const _TopAudioPlayer({
+    required this.playing,
+    required this.onPlayPause,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: EdgeInsetsDirectional.fromSTEB(
+        R.size(context, 14),
+        R.size(context, 6),
+        R.size(context, 14),
+        R.size(context, 6),
+      ),
+      padding: EdgeInsetsDirectional.symmetric(
+        horizontal: R.size(context, 12),
+        vertical: R.size(context, 8),
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(R.size(context, 16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onPlayPause,
+            icon: Icon(
+              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              color: colorScheme.primary,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              playing ? 'Playing voice message' : 'Voice message',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded)),
+        ],
+      ),
     );
   }
 }

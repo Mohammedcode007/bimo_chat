@@ -75,39 +75,41 @@ class DmController extends StateNotifier<DmState> {
     state = state.copyWith(messagesByChat: next);
   }
 
-Future<void> openChat(String chatId) async {
-  if (chatId.trim().isEmpty) return;
+  Future<void> openChat(String chatId) async {
+    if (chatId.trim().isEmpty) return;
 
-  state = state.copyWith(activeChatId: chatId);
+    state = state.copyWith(activeChatId: chatId);
 
-  ws.send({
-    'handler': WsHandlers.dmOpen,
-    'request_id': const Uuid().v4(),
-    'chatId': chatId,
-    'chat_id': chatId,
-  });
-
-  await storage.markChatRead(chatId);
-  await loadMessages(chatId);
-
-  final chats = await storage.getChats();
-
-  state = state.copyWith(activeChatId: chatId, chats: chats);
-}
-void closeChat() {
-  final chatId = state.activeChatId;
-
-  if (chatId != null && chatId.trim().isNotEmpty) {
     ws.send({
-      'handler': WsHandlers.dmClose,
+      'handler': WsHandlers.dmOpen,
       'request_id': const Uuid().v4(),
       'chatId': chatId,
       'chat_id': chatId,
     });
+
+    await storage.markChatRead(chatId);
+    await loadMessages(chatId);
+
+    final chats = await storage.getChats();
+
+    state = state.copyWith(activeChatId: chatId, chats: chats);
   }
 
-  state = state.copyWith(activeChatId: null);
-}
+  void closeChat() {
+    final chatId = state.activeChatId;
+
+    if (chatId != null && chatId.trim().isNotEmpty) {
+      ws.send({
+        'handler': WsHandlers.dmClose,
+        'request_id': const Uuid().v4(),
+        'chatId': chatId,
+        'chat_id': chatId,
+      });
+    }
+
+    state = state.copyWith(activeChatId: null);
+  }
+
   Future<void> deleteChat(String chatId) async {
     if (chatId.trim().isEmpty) return;
 
@@ -257,6 +259,92 @@ void closeChat() {
       'type': type,
       'text': text.trim(),
       'media': media,
+      if (replyTo != null) 'replyTo': replyTo,
+    });
+  }
+
+  Future<void> sendMediaBase64Message({
+    required String myUserId,
+    required String peerUserId,
+    required String peerUsername,
+    required String peerPhotoUrl,
+    required String type,
+    required String mediaBase64,
+    required String fileName,
+    required String mimeType,
+    int sizeBytes = 0,
+    String text = '',
+    Map<String, dynamic>? replyTo,
+  }) async {
+    if (myUserId.trim().isEmpty || peerUserId.trim().isEmpty) return;
+    if (!['image', 'video', 'audio', 'file'].contains(type)) return;
+    if (mediaBase64.trim().isEmpty) return;
+
+    final now = DateTime.now();
+    final tempId = const Uuid().v4();
+    final chatId = makeChatId(myUserId, peerUserId);
+
+    /*
+    رسالة مؤقتة محلية.
+    لا يوجد url حتى يرجع الباك بالرسالة النهائية.
+    لذلك نخزن base64 مؤقتًا للعرض المحلي فقط.
+  */
+    final media = {
+      'url': '',
+      'base64': mediaBase64,
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'sizeBytes': sizeBytes,
+    };
+
+    final message = LocalMessageModel(
+      messageId: tempId,
+      tempId: tempId,
+      chatId: chatId,
+      fromUserId: myUserId,
+      toUserId: peerUserId,
+      type: type,
+      text: text.trim(),
+      media: media,
+      replyTo: replyTo,
+      shared: null,
+      status: 'sending',
+      isMine: true,
+      isEdited: false,
+      isDeleted: false,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    await _saveOutgoingMessage(
+      message: message,
+      peerUserId: peerUserId,
+      peerUsername: peerUsername,
+      peerPhotoUrl: peerPhotoUrl,
+    );
+
+    ws.send({
+      'handler': WsHandlers.dmSend,
+      'request_id': tempId,
+      'temp_id': tempId,
+      'to_user_id': peerUserId,
+      'chatId': chatId,
+      'chat_id': chatId,
+      'type': type,
+      'text': text.trim(),
+
+      /*
+      هذا هو المهم:
+      الباك يستقبل mediaBase64 ويرفعه Cloudinary.
+    */
+      'mediaBase64': mediaBase64,
+
+      'media': {
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'sizeBytes': sizeBytes,
+      },
+
       if (replyTo != null) 'replyTo': replyTo,
     });
   }
@@ -481,6 +569,39 @@ void closeChat() {
 
     if (chatId.isEmpty) return;
 
+    if (messageMap.isNotEmpty) {
+      final serverMessage = LocalMessageModel(
+        messageId: messageId.isNotEmpty ? messageId : const Uuid().v4(),
+        tempId: tempId.isNotEmpty ? tempId : null,
+        chatId: chatId,
+        fromUserId: messageMap['fromUserId']?.toString() ?? '',
+        toUserId: messageMap['toUserId']?.toString() ?? '',
+        type: messageMap['type']?.toString() ?? 'text',
+        text: messageMap['text']?.toString() ?? '',
+        media: messageMap['media'] is Map
+            ? Map<String, dynamic>.from(messageMap['media'] as Map)
+            : null,
+        replyTo: messageMap['replyTo'] is Map
+            ? Map<String, dynamic>.from(messageMap['replyTo'] as Map)
+            : null,
+        shared: messageMap['shared'] is Map
+            ? Map<String, dynamic>.from(messageMap['shared'] as Map)
+            : null,
+        status: delivered ? 'delivered' : 'sent',
+        isMine: true,
+        isEdited: messageMap['isEdited'] == true,
+        isDeleted: messageMap['isDeleted'] == true,
+        createdAt:
+            DateTime.tryParse(messageMap['createdAt']?.toString() ?? '') ??
+            DateTime.now(),
+        updatedAt:
+            DateTime.tryParse(messageMap['updatedAt']?.toString() ?? '') ??
+            DateTime.now(),
+      );
+
+      await storage.upsertMessage(serverMessage);
+    }
+
     await storage.updateMessageStatus(
       chatId: chatId,
       messageId: messageId,
@@ -498,80 +619,81 @@ void closeChat() {
     state = state.copyWith(loading: false, error: reason);
   }
 
-Future<void> _handleIncomingMessage(Map<String, dynamic> data) async {
-  final messageMap = data['message'] is Map
-      ? Map<String, dynamic>.from(data['message'] as Map)
-      : <String, dynamic>{};
+  Future<void> _handleIncomingMessage(Map<String, dynamic> data) async {
+    final messageMap = data['message'] is Map
+        ? Map<String, dynamic>.from(data['message'] as Map)
+        : <String, dynamic>{};
 
-  if (messageMap.isEmpty) return;
+    if (messageMap.isEmpty) return;
 
-  final message = _messageFromServer(messageMap);
+    final message = _messageFromServer(messageMap);
 
-  final isActive = state.activeChatId == message.chatId;
+    final isActive = state.activeChatId == message.chatId;
 
-  await storage.upsertMessage(message);
+    await storage.upsertMessage(message);
 
-  final peerUserId = message.fromUserId;
+    final peerUserId = message.fromUserId;
 
-  String readNonEmpty(dynamic value) {
-    final text = value?.toString().trim() ?? '';
-    return text;
+    String readNonEmpty(dynamic value) {
+      final text = value?.toString().trim() ?? '';
+      return text;
+    }
+
+    final fromUsernameFromEvent = readNonEmpty(data['fromUsername']);
+    final fromUsernameFromMessage = readNonEmpty(messageMap['fromUsername']);
+
+    final fromPhotoFromEvent = readNonEmpty(data['fromPhotoUrl']);
+    final fromPhotoFromMessage = readNonEmpty(messageMap['fromPhotoUrl']);
+
+    final peerUsername = fromUsernameFromEvent.isNotEmpty
+        ? fromUsernameFromEvent
+        : fromUsernameFromMessage.isNotEmpty
+        ? fromUsernameFromMessage
+        : peerUserId;
+
+    final peerPhotoUrl = fromPhotoFromEvent.isNotEmpty
+        ? fromPhotoFromEvent
+        : fromPhotoFromMessage.isNotEmpty
+        ? fromPhotoFromMessage
+        : '';
+
+    final chats = await storage.getChats();
+
+    final index = chats.indexWhere((chat) => chat.chatId == message.chatId);
+
+    final unread = isActive
+        ? 0
+        : index >= 0
+        ? chats[index].unreadCount + 1
+        : 1;
+
+    final chat = LocalChatModel(
+      chatId: message.chatId,
+      peerUserId: peerUserId,
+      peerUsername: peerUsername,
+      peerPhotoUrl: peerPhotoUrl,
+      lastMessageText: previewText(message),
+      lastMessageType: message.type,
+      lastMessageAt: message.createdAt,
+      unreadCount: unread,
+    );
+
+    await storage.upsertChat(chat);
+
+    if (isActive && state.activeChatId == message.chatId) {
+      await storage.markChatRead(message.chatId);
+
+      markSeen(
+        toUserId: message.fromUserId,
+        chatId: message.chatId,
+        messageIds: [message.messageId],
+      );
+    }
+
+    await loadMessages(message.chatId);
+    await loadChats();
   }
 
-  final fromUsernameFromEvent = readNonEmpty(data['fromUsername']);
-  final fromUsernameFromMessage = readNonEmpty(messageMap['fromUsername']);
-
-  final fromPhotoFromEvent = readNonEmpty(data['fromPhotoUrl']);
-  final fromPhotoFromMessage = readNonEmpty(messageMap['fromPhotoUrl']);
-
-  final peerUsername = fromUsernameFromEvent.isNotEmpty
-      ? fromUsernameFromEvent
-      : fromUsernameFromMessage.isNotEmpty
-      ? fromUsernameFromMessage
-      : peerUserId;
-
-  final peerPhotoUrl = fromPhotoFromEvent.isNotEmpty
-      ? fromPhotoFromEvent
-      : fromPhotoFromMessage.isNotEmpty
-      ? fromPhotoFromMessage
-      : '';
-
-  final chats = await storage.getChats();
-
-  final index = chats.indexWhere((chat) => chat.chatId == message.chatId);
-
-  final unread = isActive
-      ? 0
-      : index >= 0
-      ? chats[index].unreadCount + 1
-      : 1;
-
-  final chat = LocalChatModel(
-    chatId: message.chatId,
-    peerUserId: peerUserId,
-    peerUsername: peerUsername,
-    peerPhotoUrl: peerPhotoUrl,
-    lastMessageText: previewText(message),
-    lastMessageType: message.type,
-    lastMessageAt: message.createdAt,
-    unreadCount: unread,
-  );
-
-  await storage.upsertChat(chat);
-
-if (isActive && state.activeChatId == message.chatId) {
-  await storage.markChatRead(message.chatId);
-
-  markSeen(
-    toUserId: message.fromUserId,
-    chatId: message.chatId,
-    messageIds: [message.messageId],
-  );
-}
-
-  await loadMessages(message.chatId);
-  await loadChats();
-}
   LocalMessageModel _messageFromServer(Map<String, dynamic> map) {
     final fromUserId = map['fromUserId']?.toString() ?? '';
     final toUserId = map['toUserId']?.toString() ?? '';
