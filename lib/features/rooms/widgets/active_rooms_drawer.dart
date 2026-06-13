@@ -19,6 +19,8 @@ class ActiveRoomsDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    final rooms = activeRooms.isEmpty ? [currentRoom] : activeRooms;
+
     return Material(
       color: Colors.transparent,
       child: Stack(
@@ -29,7 +31,6 @@ class ActiveRoomsDrawer extends StatelessWidget {
               child: Container(color: Colors.black.withValues(alpha: 0.18)),
             ),
           ),
-
           PositionedDirectional(
             end: 0,
             top: 0,
@@ -61,38 +62,79 @@ class ActiveRoomsDrawer extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Active',
+                              style: TextStyle(
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.82,
+                                ),
+                                fontSize: R.sp(context, 22),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: colorScheme.onSurfaceVariant,
+                              size: R.size(context, 26),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: R.size(context, 8)),
+
                       Text(
-                        'Active',
+                        '${rooms.length} active room${rooms.length == 1 ? '' : 's'}',
                         style: TextStyle(
-                          color: colorScheme.onSurface.withValues(alpha: 0.82),
-                          fontSize: R.sp(context, 22),
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: R.sp(context, 15),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
 
-                      SizedBox(height: R.size(context, 26)),
+                      SizedBox(height: R.size(context, 24)),
 
                       Expanded(
-                        child: ListView.separated(
-                          padding: EdgeInsets.zero,
-                          itemCount: activeRooms.length,
-                          separatorBuilder: (_, __) {
-                            return SizedBox(height: R.size(context, 14));
-                          },
-                          itemBuilder: (context, index) {
-                            final room = activeRooms[index];
-                            final selected = room.id == currentRoom.id;
+                        child: rooms.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No active rooms',
+                                  style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontSize: R.sp(context, 16),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: EdgeInsets.zero,
+                                itemCount: rooms.length,
+                                separatorBuilder: (_, __) {
+                                  return SizedBox(height: R.size(context, 14));
+                                },
+                                itemBuilder: (context, index) {
+                                  final room = rooms[index];
+                                  final selected = room.id == currentRoom.id;
 
-                            return _ActiveRoomTile(
-                              room: room,
-                              selected: selected,
-                              onTap: () {
-                                Navigator.pop(context);
-                                onRoomTap(room);
-                              },
-                            );
-                          },
-                        ),
+                                  return _ActiveRoomTile(
+                                    room: room,
+                                    selected: selected,
+                                    onTap: () {
+                                      Navigator.pop(context);
+
+                                      if (!selected) {
+                                        onRoomTap(room);
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -121,46 +163,114 @@ class _ActiveRoomTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    final selectedColor = const Color(0xFFA8EAF5);
+    final accentColor = const Color(0xFF087887);
+
     return Material(
-      color: selected ? const Color(0xFFA8EAF5) : Colors.transparent,
+      color: selected ? selectedColor : Colors.transparent,
       borderRadius: BorderRadius.circular(R.size(context, 42)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(R.size(context, 42)),
-        child: Container(
-          height: R.size(context, 76),
-          padding: EdgeInsetsDirectional.symmetric(
-            horizontal: R.size(context, 26),
+        child:  Container(
+  constraints: BoxConstraints(
+    minHeight: R.size(context, 76),
+  ),
+  padding: EdgeInsetsDirectional.symmetric(
+            horizontal: R.size(context, 20),
+            vertical: R.size(context, 8),
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.bubble_chart_rounded,
-                color: selected
-                    ? const Color(0xFF087887)
-                    : colorScheme.onSurface.withValues(alpha: 0.72),
-                size: R.size(context, 36),
+              CircleAvatar(
+                radius: R.size(context, 24),
+                backgroundColor: selected
+                    ? accentColor.withValues(alpha: 0.14)
+                    : room.avatarColor.withValues(alpha: 0.18),
+                child: room.isVoice
+                    ? Icon(
+                        Icons.mic_rounded,
+                        color: selected ? accentColor : room.avatarColor,
+                        size: R.size(context, 23),
+                      )
+                    : Text(
+                        (room.avatarText ?? '').isNotEmpty
+                            ? room.avatarText!
+                            : _firstLetter(room.name ?? ''),
+                        style: TextStyle(
+                          color: selected ? accentColor : room.avatarColor,
+                          fontSize: R.sp(context, 18),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ),
 
-              SizedBox(width: R.size(context, 22)),
+              SizedBox(width: R.size(context, 16)),
 
               Expanded(
-                child: Text(
-                  room.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textDirection: TextDirection.rtl,
-                  style: TextStyle(
-                    color: colorScheme.onSurface.withValues(alpha: 0.85),
-                    fontSize: R.sp(context, 19),
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      room.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textDirection: TextDirection.rtl,
+                      style: TextStyle(
+                        color: colorScheme.onSurface.withValues(alpha: 0.88),
+                        fontSize: R.sp(context, 19),
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: R.size(context, 3)),
+                    Text(
+                      '${room.membersCount} online'
+                      '${room.isVoice ? ' • Voice' : ''}'
+                      '${room.isFavorite ? ' • Favorite' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected
+                            ? accentColor
+                            : colorScheme.onSurfaceVariant,
+                        fontSize: R.sp(context, 13),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+
+              if (selected)
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: accentColor,
+                  size: R.size(context, 22),
+                )
+              else
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                  size: R.size(context, 15),
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  static String _firstLetter(String text) {
+    final value = text.trim();
+
+    if (value.isEmpty) return '?';
+
+    final runes = value.runes.toList();
+
+    if (runes.isEmpty) return '?';
+
+    return String.fromCharCode(runes.first).toUpperCase();
   }
 }

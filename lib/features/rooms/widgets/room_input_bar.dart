@@ -6,6 +6,7 @@ import '../../../core/utils/responsive.dart';
 class RoomInputBar extends StatefulWidget {
   final TextEditingController controller;
   final bool isRecording;
+
   final VoidCallback onSendText;
   final VoidCallback onPickImage;
   final VoidCallback onStartRecord;
@@ -40,6 +41,8 @@ class _RoomInputBarState extends State<RoomInputBar>
   void initState() {
     super.initState();
 
+    hasText = widget.controller.text.trim().isNotEmpty;
+
     widget.controller.addListener(onTextChanged);
     inputFocusNode.addListener(onInputFocusChanged);
 
@@ -61,12 +64,12 @@ class _RoomInputBarState extends State<RoomInputBar>
   }
 
   void onTextChanged() {
-    final value = widget.controller.text.trim().isNotEmpty;
+    final nextHasText = widget.controller.text.trim().isNotEmpty;
 
-    if (value == hasText) return;
+    if (nextHasText == hasText) return;
 
     setState(() {
-      hasText = value;
+      hasText = nextHasText;
     });
   }
 
@@ -89,6 +92,8 @@ class _RoomInputBarState extends State<RoomInputBar>
   }
 
   Future<void> toggleEmoji() async {
+    if (widget.isRecording) return;
+
     if (showEmoji) {
       setState(() {
         showEmoji = false;
@@ -110,12 +115,17 @@ class _RoomInputBarState extends State<RoomInputBar>
   }
 
   void sendText() {
-    if (!hasText) return;
+    final text = widget.controller.text.trim();
+
+    if (text.isEmpty) return;
 
     widget.onSendText();
 
+    if (!mounted) return;
+
     setState(() {
       showEmoji = false;
+      hasText = false;
     });
   }
 
@@ -129,7 +139,57 @@ class _RoomInputBarState extends State<RoomInputBar>
 
     final height = screenHeight * 0.36;
 
-    return height.clamp(R.size(context, 260), R.size(context, 340));
+    return height.clamp(
+      R.size(context, 260),
+      R.size(context, 340),
+    );
+  }
+
+  Widget buildActionButton(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (hasText) {
+      return IconButton(
+        onPressed: sendText,
+        icon: Icon(
+          Icons.send_rounded,
+          size: R.size(context, 31),
+          color: const Color(0xFF087887),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onLongPressStart: (_) {
+        if (showEmoji) {
+          setState(() {
+            showEmoji = false;
+          });
+        }
+
+        FocusScope.of(context).unfocus();
+        widget.onStartRecord();
+      },
+      onLongPressEnd: (_) {
+        widget.onStopRecord();
+      },
+      onTap: widget.isRecording ? widget.onStopRecord : null,
+      child: Padding(
+        padding: EdgeInsets.all(R.size(context, 8)),
+        child: ScaleTransition(
+          scale: widget.isRecording
+              ? pulseController
+              : const AlwaysStoppedAnimation(1),
+          child: Icon(
+            Icons.mic_rounded,
+            size: R.size(context, 32),
+            color: widget.isRecording
+                ? Colors.red
+                : colorScheme.onSurface.withValues(alpha: 0.75),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -142,7 +202,9 @@ class _RoomInputBarState extends State<RoomInputBar>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            constraints: BoxConstraints(minHeight: R.size(context, 62)),
+            constraints: BoxConstraints(
+              minHeight: R.size(context, 62),
+            ),
             color: Theme.of(context).scaffoldBackgroundColor,
             padding: EdgeInsetsDirectional.fromSTEB(
               R.size(context, 10),
@@ -158,85 +220,71 @@ class _RoomInputBarState extends State<RoomInputBar>
                     showEmoji
                         ? Icons.keyboard_alt_outlined
                         : Icons.emoji_emotions_outlined,
-                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                    color: widget.isRecording
+                        ? colorScheme.onSurface.withValues(alpha: 0.25)
+                        : colorScheme.onSurface.withValues(alpha: 0.75),
                     size: R.size(context, 34),
                   ),
                 ),
 
                 Expanded(
-                  child: GestureDetector(
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: inputFocusNode,
+                    enabled: !widget.isRecording,
+                    minLines: 1,
+                    maxLines: 4,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                     onTap: openKeyboard,
-                    child: TextField(
-                      controller: widget.controller,
-                      focusNode: inputFocusNode,
-                      minLines: 1,
-                      maxLines: 4,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      style: TextStyle(
+                    style: TextStyle(
+                      fontSize: R.sp(context, 22),
+                      color: colorScheme.onSurface,
+                      height: 1.25,
+                    ),
+                    decoration: InputDecoration(
+                      hintText:
+                          widget.isRecording ? 'Recording...' : 'Message',
+                      hintStyle: TextStyle(
                         fontSize: R.sp(context, 22),
-                        color: colorScheme.onSurface,
-                        height: 1.25,
+                        color: colorScheme.onSurface.withValues(alpha: 0.38),
                       ),
-                      decoration: InputDecoration(
-                        hintText: widget.isRecording
-                            ? 'Recording...'
-                            : 'Message',
-                        hintStyle: TextStyle(
-                          fontSize: R.sp(context, 22),
-                          color: colorScheme.onSurface.withValues(alpha: 0.38),
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          vertical: R.size(context, 10),
-                        ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: R.size(context, 10),
                       ),
                     ),
                   ),
                 ),
 
                 IconButton(
-                  onPressed: widget.onPickImage,
+                  onPressed: widget.isRecording ? null : widget.onPickImage,
                   icon: Icon(
                     Icons.attach_file_rounded,
                     size: R.size(context, 32),
-                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                    color: widget.isRecording
+                        ? colorScheme.onSurface.withValues(alpha: 0.25)
+                        : colorScheme.onSurface.withValues(alpha: 0.75),
                   ),
                 ),
 
-                if (hasText)
-                  IconButton(
-                    onPressed: sendText,
-                    icon: Icon(
-                      Icons.send_rounded,
-                      size: R.size(context, 31),
-                      color: const Color(0xFF087887),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 120),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  child: SizedBox(
+                    key: ValueKey(
+                      hasText ? 'send' : widget.isRecording ? 'recording' : 'mic',
                     ),
-                  )
-                else
-                  GestureDetector(
-                    onLongPressStart: (_) => widget.onStartRecord(),
-                    onLongPressEnd: (_) => widget.onStopRecord(),
-                    onTap: widget.isRecording ? widget.onStopRecord : null,
-                    child: Padding(
-                      padding: EdgeInsets.all(R.size(context, 8)),
-                      child: ScaleTransition(
-                        scale: widget.isRecording
-                            ? pulseController
-                            : const AlwaysStoppedAnimation(1),
-                        child: Icon(
-                          Icons.mic_rounded,
-                          size: R.size(context, 32),
-                          color: widget.isRecording
-                              ? Colors.red
-                              : colorScheme.onSurface.withValues(alpha: 0.75),
-                        ),
-                      ),
-                    ),
+                    width: R.size(context, 48),
+                    height: R.size(context, 48),
+                    child: buildActionButton(context),
                   ),
+                ),
               ],
             ),
           ),
@@ -244,17 +292,41 @@ class _RoomInputBarState extends State<RoomInputBar>
           if (widget.isRecording)
             Container(
               width: double.infinity,
-              padding: EdgeInsets.symmetric(vertical: R.size(context, 8)),
+              padding: EdgeInsets.symmetric(
+                horizontal: R.size(context, 14),
+                vertical: R.size(context, 8),
+              ),
               color: Colors.red.withValues(alpha: 0.08),
-              child: Center(
-                child: Text(
-                  'Recording... release to send',
-                  style: TextStyle(
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.fiber_manual_record_rounded,
                     color: Colors.red,
-                    fontSize: R.sp(context, 14),
-                    fontWeight: FontWeight.w800,
+                    size: R.size(context, 15),
                   ),
-                ),
+                  SizedBox(width: R.size(context, 8)),
+                  Expanded(
+                    child: Text(
+                      'Recording... release to send',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: R.sp(context, 14),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: widget.onCancelRecord,
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: R.sp(context, 14),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -273,14 +345,12 @@ class _RoomInputBarState extends State<RoomInputBar>
                         emojiViewConfig: EmojiViewConfig(
                           columns: 7,
                           emojiSizeMax: R.size(context, 30),
-                          backgroundColor: Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor,
+                          backgroundColor:
+                              Theme.of(context).scaffoldBackgroundColor,
                         ),
                         categoryViewConfig: CategoryViewConfig(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor,
+                          backgroundColor:
+                              Theme.of(context).scaffoldBackgroundColor,
                           indicatorColor: const Color(0xFF087887),
                           iconColor: colorScheme.onSurface.withValues(
                             alpha: 0.45,
@@ -291,14 +361,15 @@ class _RoomInputBarState extends State<RoomInputBar>
                           enabled: false,
                         ),
                         searchViewConfig: SearchViewConfig(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).scaffoldBackgroundColor,
+                          backgroundColor:
+                              Theme.of(context).scaffoldBackgroundColor,
                         ),
                       ),
                     ),
                   )
-                : const SizedBox.shrink(key: ValueKey('emoji_hidden')),
+                : const SizedBox.shrink(
+                    key: ValueKey('emoji_hidden'),
+                  ),
           ),
         ],
       ),

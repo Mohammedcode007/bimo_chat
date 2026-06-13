@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/utils/responsive.dart';
-import '../data/room_model.dart';
+
+enum RoomFilterType {
+  public,
+  voice,
+  active,
+  favorite,
+}
 
 class RoomsFilterChips extends StatelessWidget {
   final RoomFilterType selectedFilter;
@@ -13,7 +20,6 @@ class RoomsFilterChips extends StatelessWidget {
     required this.onChanged,
     this.activeCount = 1,
   });
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(

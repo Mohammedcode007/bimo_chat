@@ -36,9 +36,11 @@ class RoomMessageBubble extends StatelessWidget {
     final isMe = message.isMe;
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * 0.72;
 
-    final bubbleColor = isDark
-        ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.82)
-        : Colors.white;
+    final bubbleColor = isMe
+        ? const Color(0xFFDCF8C6)
+        : isDark
+            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.82)
+            : Colors.white;
 
     final bubbleBorderColor = isDark
         ? colorScheme.outlineVariant.withValues(alpha: 0.35)
@@ -53,9 +55,8 @@ class RoomMessageBubble extends StatelessWidget {
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isMe
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isMe) ...[
             _AvatarSide(
@@ -65,7 +66,6 @@ class RoomMessageBubble extends StatelessWidget {
             ),
             SizedBox(width: R.size(context, 8)),
           ],
-
           Flexible(
             child: IntrinsicWidth(
               child: ConstrainedBox(
@@ -108,22 +108,16 @@ class RoomMessageBubble extends StatelessWidget {
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment:
+                        isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                     children: [
-                      Align(
-                        alignment: isMe
-                            ? AlignmentDirectional.centerEnd
-                            : AlignmentDirectional.centerStart,
-                        child: _SenderNameInside(
-                          message: message,
-                          colorScheme: colorScheme,
-                          onLongPress: onNameLongPress,
-                          alignEnd: isMe,
-                        ),
+                      _SenderNameInside(
+                        message: message,
+                        colorScheme: colorScheme,
+                        onLongPress: onNameLongPress,
+                        alignEnd: isMe,
                       ),
-
                       SizedBox(height: R.size(context, 6)),
-
                       Container(
                         width: double.infinity,
                         height: R.size(context, 1),
@@ -131,9 +125,7 @@ class RoomMessageBubble extends StatelessWidget {
                           alpha: isDark ? 0.18 : 0.13,
                         ),
                       ),
-
                       SizedBox(height: R.size(context, 8)),
-
                       _MessageContent(
                         message: message,
                         colorScheme: colorScheme,
@@ -147,7 +139,6 @@ class RoomMessageBubble extends StatelessWidget {
               ),
             ),
           ),
-
           if (isMe) ...[
             SizedBox(width: R.size(context, 8)),
             _AvatarSide(
@@ -176,6 +167,11 @@ class _SenderNameInside extends StatelessWidget {
     required this.alignEnd,
   });
 
+  bool get hasBadge {
+    final badge = message.sender.badge;
+    return badge != null && badge.trim().isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
     final fallbackNameColor = colorScheme.onSurface.withValues(alpha: 0.92);
@@ -184,18 +180,16 @@ class _SenderNameInside extends StatelessWidget {
       onLongPress: onLongPress,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: alignEnd
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (alignEnd && message.sender.badge != null) ...[
+          if (alignEnd && hasBadge) ...[
             Text(
               message.sender.badge!,
               style: TextStyle(fontSize: R.sp(context, 15), height: 1),
             ),
             SizedBox(width: R.size(context, 5)),
           ],
-
           Flexible(
             child: Text(
               message.sender.name,
@@ -210,8 +204,7 @@ class _SenderNameInside extends StatelessWidget {
               ),
             ),
           ),
-
-          if (!alignEnd && message.sender.badge != null) ...[
+          if (!alignEnd && hasBadge) ...[
             SizedBox(width: R.size(context, 5)),
             Text(
               message.sender.badge!,
@@ -242,16 +235,16 @@ class _MessageContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.type == RoomChatMessageType.image &&
-        message.localPath != null) {
+        message.localPath != null &&
+        message.localPath!.trim().isNotEmpty) {
       return GestureDetector(
         onTap: onImageTap,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(R.size(context, 14)),
-          child: Image.file(
-            File(message.localPath!),
+          child: _ChatImage(
+            path: message.localPath!,
             width: R.size(context, 220),
             height: R.size(context, 180),
-            fit: BoxFit.cover,
           ),
         ),
       );
@@ -263,18 +256,15 @@ class _MessageContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(R.size(context, 18)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: alignEnd
-              ? MainAxisAlignment.end
-              : MainAxisAlignment.start,
+          mainAxisAlignment:
+              alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
             Icon(
               Icons.play_circle_fill_rounded,
               size: R.size(context, 32),
               color: const Color(0xFF087887),
             ),
-
             SizedBox(width: R.size(context, 8)),
-
             Flexible(
               child: Text(
                 'Voice message',
@@ -287,8 +277,8 @@ class _MessageContent extends StatelessWidget {
                 ),
               ),
             ),
-
-            if (message.duration != null) ...[
+            if (message.duration != null &&
+                message.duration!.trim().isNotEmpty) ...[
               SizedBox(width: R.size(context, 8)),
               Text(
                 message.duration!,
@@ -312,6 +302,75 @@ class _MessageContent extends StatelessWidget {
         fontSize: R.sp(context, 22),
         height: 1.35,
         fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class _ChatImage extends StatelessWidget {
+  final String path;
+  final double width;
+  final double height;
+
+  const _ChatImage({
+    required this.path,
+    required this.width,
+    required this.height,
+  });
+
+  bool get isNetwork {
+    final value = path.trim().toLowerCase();
+    return value.startsWith('http://') || value.startsWith('https://');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isNetwork) {
+      return Image.network(
+        path,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return _ImageErrorBox(width: width, height: height);
+        },
+      );
+    }
+
+    return Image.file(
+      File(path),
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) {
+        return _ImageErrorBox(width: width, height: height);
+      },
+    );
+  }
+}
+
+class _ImageErrorBox extends StatelessWidget {
+  final double width;
+  final double height;
+
+  const _ImageErrorBox({
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      color: colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.broken_image_rounded,
+        color: colorScheme.onSurfaceVariant,
+        size: R.size(context, 34),
       ),
     );
   }
@@ -345,7 +404,6 @@ class _AvatarSide extends StatelessWidget {
               child: _AvatarWithFrame(message: message),
             ),
           ),
-
           if (message.roleStarColor != Colors.transparent)
             PositionedDirectional(
               top: R.size(context, -3),
@@ -369,35 +427,93 @@ class _AvatarWithFrame extends StatelessWidget {
 
   const _AvatarWithFrame({required this.message});
 
+  bool get hasAvatar {
+    return message.sender.avatarUrl.trim().isNotEmpty;
+  }
+
+  bool get hasFrame {
+    final frame = message.sender.frame;
+    return frame != null && frame.trim().isNotEmpty;
+  }
+
+  bool get hasBadge {
+    final badge = message.sender.badge;
+    return badge != null && badge.trim().isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final hasFrame = message.sender.frame != null;
 
     final frameColor = message.sender.frame == 'gold'
         ? const Color(0xFFFFC107)
-        : colorScheme.error;
+        : message.sender.frame == 'blue'
+            ? const Color(0xFF3B82F6)
+            : message.sender.frame == 'purple'
+                ? const Color(0xFF7C3AED)
+                : colorScheme.error;
 
-    return Container(
-      padding: EdgeInsets.all(hasFrame ? R.size(context, 3) : 0),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: hasFrame
-            ? Border.all(color: frameColor, width: R.size(context, 2))
-            : null,
-      ),
-      child: CircleAvatar(
-        radius: R.size(context, 31),
-        backgroundColor: colorScheme.primary.withValues(alpha: 0.95),
-        child: Text(
-          message.sender.avatarText,
-          style: TextStyle(
-            color: colorScheme.onPrimary,
-            fontSize: R.sp(context, 18),
-            fontWeight: FontWeight.w800,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: EdgeInsets.all(hasFrame ? R.size(context, 3) : 0),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: hasFrame
+                ? Border.all(color: frameColor, width: R.size(context, 2))
+                : null,
+          ),
+          child: CircleAvatar(
+            radius: R.size(context, 31),
+            backgroundColor: colorScheme.primary.withValues(alpha: 0.95),
+            backgroundImage: hasAvatar
+                ? NetworkImage(message.sender.avatarUrl.trim())
+                : null,
+            onBackgroundImageError: hasAvatar
+                ? (_, __) {
+                    debugPrint('Avatar image failed: ${message.sender.avatarUrl}');
+                  }
+                : null,
+            child: hasAvatar
+                ? null
+                : Text(
+                    message.sender.avatarText,
+                    style: TextStyle(
+                      color: colorScheme.onPrimary,
+                      fontSize: R.sp(context, 18),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
           ),
         ),
-      ),
+        if (hasBadge)
+          PositionedDirectional(
+            end: R.size(context, -2),
+            bottom: R.size(context, -2),
+            child: Container(
+              width: R.size(context, 22),
+              height: R.size(context, 22),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: colorScheme.outlineVariant,
+                  width: R.size(context, 1),
+                ),
+              ),
+              child: Text(
+                message.sender.badge!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: R.sp(context, 12),
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

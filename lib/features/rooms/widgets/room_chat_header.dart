@@ -5,6 +5,8 @@ import '../../../core/utils/responsive.dart';
 class RoomChatHeader extends StatelessWidget {
   final String roomName;
   final int membersCount;
+  final bool isFavorite;
+
   final VoidCallback onRoomsMenuTap;
   final VoidCallback onUsersTap;
   final VoidCallback onUploadTap;
@@ -14,6 +16,7 @@ class RoomChatHeader extends StatelessWidget {
     super.key,
     required this.roomName,
     required this.membersCount,
+    this.isFavorite = false,
     required this.onRoomsMenuTap,
     required this.onUsersTap,
     required this.onUploadTap,
@@ -51,7 +54,7 @@ class RoomChatHeader extends StatelessWidget {
               ),
             ),
 
-            SizedBox(width: R.size(context, 26)),
+            SizedBox(width: R.size(context, 22)),
 
             Expanded(
               child: InkWell(
@@ -69,32 +72,50 @@ class RoomChatHeader extends StatelessWidget {
                       style: TextStyle(
                         color: colorScheme.onSurface,
                         fontSize: R.sp(context, 18),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         height: 1.1,
                       ),
                     ),
 
                     SizedBox(height: R.size(context, 5)),
 
-                    Text(
-                      '$membersCount Members',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: R.sp(context, 19),
-                        fontWeight: FontWeight.w500,
-                        height: 1.1,
-                      ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          color: const Color(0xFF087887),
+                          size: R.size(context, 9),
+                        ),
+                        SizedBox(width: R.size(context, 6)),
+                        Flexible(
+                          child: Text(
+                            '$membersCount Online',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                              fontSize: R.sp(context, 18),
+                              fontWeight: FontWeight.w500,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
 
-            _HeaderIcon(icon: Icons.cloud_upload_outlined, onTap: onUploadTap),
+            _HeaderIcon(
+              icon: Icons.cloud_upload_outlined,
+              onTap: onUploadTap,
+            ),
 
-            _HeaderIcon(icon: Icons.groups_rounded, onTap: onUsersTap),
+            _HeaderIcon(
+              icon: Icons.groups_rounded,
+              onTap: onUsersTap,
+            ),
 
             PopupMenuButton<String>(
               onSelected: onMenuSelect,
@@ -110,7 +131,11 @@ class RoomChatHeader extends StatelessWidget {
               ),
               itemBuilder: (context) {
                 return [
-                  _menuItem(context, 'favorite', 'Remove from favourite'),
+                  _menuItem(
+                    context,
+                    'favorite',
+                    isFavorite ? 'Remove from favourite' : 'Add to favourite',
+                  ),
                   _menuItem(context, 'welcome', 'Welcome message'),
                   _menuItem(context, 'settings', 'Settings'),
                   _menuItem(context, 'invitation', 'Room invitation'),
@@ -153,12 +178,12 @@ class RoomChatHeader extends StatelessWidget {
 
     return PopupMenuItem(
       value: value,
-      height: R.size(context, 62),
+      height: R.size(context, 58),
       child: Text(
         title,
         style: TextStyle(
           color: color ?? colorScheme.onSurface,
-          fontSize: R.sp(context, 22),
+          fontSize: R.sp(context, 21),
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -170,7 +195,10 @@ class _HeaderIcon extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _HeaderIcon({required this.icon, required this.onTap});
+  const _HeaderIcon({
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +212,7 @@ class _HeaderIcon extends StatelessWidget {
         child: Icon(
           icon,
           color: colorScheme.onSurface.withValues(alpha: 0.75),
-          size: R.size(context, 32),
+          size: R.size(context, 31),
         ),
       ),
     );

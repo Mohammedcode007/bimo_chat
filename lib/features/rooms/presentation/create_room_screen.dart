@@ -1,35 +1,77 @@
 import 'package:flutter/material.dart';
-import '../../../core/utils/responsive.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CreateRoomScreen extends StatefulWidget {
+import '../../../core/utils/responsive.dart';
+import '../logic/rooms_provider.dart';
+
+class CreateRoomScreen extends ConsumerStatefulWidget {
   const CreateRoomScreen({super.key});
 
   @override
-  State<CreateRoomScreen> createState() => _CreateRoomScreenState();
+  ConsumerState<CreateRoomScreen> createState() => _CreateRoomScreenState();
 }
 
-class _CreateRoomScreenState extends State<CreateRoomScreen> {
+class _CreateRoomScreenState extends ConsumerState<CreateRoomScreen> {
   final roomNameController = TextEditingController();
+  final passwordController = TextEditingController();
+
   bool isPrivate = false;
+  bool voiceEnabled = false;
+  bool loading = false;
 
   @override
   void dispose() {
     roomNameController.dispose();
+    passwordController.dispose();
     super.dispose();
   }
 
-  void createRoom() {
+  void showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> createRoom() async {
     final roomName = roomNameController.text.trim();
+    final password = passwordController.text.trim();
 
     if (roomName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Room name is required'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showMessage('Room name is required');
       return;
     }
+
+    if (roomName.length > 50) {
+      showMessage('Room name must be 50 characters or less');
+      return;
+    }
+
+    if (isPrivate && password.length < 4) {
+      showMessage('Password must be at least 4 characters');
+      return;
+    }
+
+    setState(() {
+      loading = true;
+    });
+
+    ref.read(roomsProvider.notifier).createRoom(
+          name: roomName,
+          description: '',
+          password: isPrivate ? password : '',
+          voiceEnabled: voiceEnabled,
+        );
+
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    setState(() {
+      loading = false;
+    });
 
     Navigator.pop(context);
   }
@@ -37,6 +79,18 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    ref.listen(roomsProvider, (previous, next) {
+      if (next.error != null && next.error!.isNotEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          loading = false;
+        });
+
+        showMessage(next.error!);
+      }
+    });
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -53,11 +107,13 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
             children: [
               TextField(
                 controller: roomNameController,
+                maxLength: 50,
                 style: TextStyle(
                   fontSize: R.sp(context, 24),
                   color: colorScheme.onSurface,
                 ),
                 decoration: InputDecoration(
+                  counterText: '',
                   hintText: 'Room name',
                   hintStyle: TextStyle(
                     color: colorScheme.onSurface.withValues(alpha: 0.35),
@@ -79,7 +135,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                 ),
               ),
 
-              SizedBox(height: R.size(context, 28)),
+              SizedBox(height: R.size(context, 24)),
 
               Row(
                 children: [
@@ -91,6 +147,10 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                       onChanged: (value) {
                         setState(() {
                           isPrivate = value ?? false;
+
+                          if (!isPrivate) {
+                            passwordController.clear();
+                          }
                         });
                       },
                       side: BorderSide(
@@ -101,7 +161,73 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                   ),
                   SizedBox(width: R.size(context, 12)),
                   Text(
-                    'Private rooms',
+                    'Private room',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: R.sp(context, 21),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+
+              if (isPrivate) ...[
+                SizedBox(height: R.size(context, 18)),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  maxLength: 50,
+                  style: TextStyle(
+                    fontSize: R.sp(context, 22),
+                    color: colorScheme.onSurface,
+                  ),
+                  decoration: InputDecoration(
+                    counterText: '',
+                    hintText: 'Room password',
+                    hintStyle: TextStyle(
+                      color: colorScheme.onSurface.withValues(alpha: 0.35),
+                      fontSize: R.sp(context, 22),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.onSurface),
+                    ),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: colorScheme.onSurface),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: colorScheme.onSurface,
+                        width: R.size(context, 1.4),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+
+              SizedBox(height: R.size(context, 22)),
+
+              Row(
+                children: [
+                  SizedBox(
+                    width: R.size(context, 28),
+                    height: R.size(context, 28),
+                    child: Checkbox(
+                      value: voiceEnabled,
+                      onChanged: (value) {
+                        setState(() {
+                          voiceEnabled = value ?? false;
+                        });
+                      },
+                      side: BorderSide(
+                        color: colorScheme.onSurface.withValues(alpha: 0.8),
+                        width: R.size(context, 2.4),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: R.size(context, 12)),
+                  Text(
+                    'Voice room',
                     style: TextStyle(
                       color: colorScheme.onSurface,
                       fontSize: R.sp(context, 21),
@@ -118,10 +244,12 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                   width: R.size(context, 210),
                   height: R.size(context, 58),
                   child: ElevatedButton(
-                    onPressed: createRoom,
+                    onPressed: loading ? null : createRoom,
                     style: ElevatedButton.styleFrom(
                       elevation: 0,
                       backgroundColor: const Color(0xFF087887),
+                      disabledBackgroundColor:
+                          const Color(0xFF087887).withValues(alpha: 0.45),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
@@ -129,13 +257,22 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                         ),
                       ),
                     ),
-                    child: Text(
-                      'Create Room',
-                      style: TextStyle(
-                        fontSize: R.sp(context, 21),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    child: loading
+                        ? SizedBox(
+                            width: R.size(context, 22),
+                            height: R.size(context, 22),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Create Room',
+                            style: TextStyle(
+                              fontSize: R.sp(context, 21),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -147,15 +284,11 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                   child: Text(
                     'Please read the following terms and conditions\n'
                     'carefully before creating a room:\n'
-                    '  1.  Creating a public room costs 50, 000 TCoins.\n'
-                    'This fee helps prevent spam and ensures a quality\n'
-                    'experience for all users.\n'
-                    '  2.  Each public room must be boosted at least\n'
-                    '30 times per month to remain active for the next\n'
-                    'month.\n'
-                    '  3.  Rooms with offensive or inappropriate names,\n'
-                    'or those that violate community guidelines, will be\n'
-                    'removed. TCoins will not be refunded in such cases.\n\n'
+                    '  1. Room name must not contain offensive words.\n'
+                    '  2. The creator is responsible for managing owners, admins, members and bans.\n'
+                    '  3. Private rooms require a password.\n'
+                    '  4. Voice room option makes the room appear in the Voice tab.\n'
+                    '  5. Rooms that violate community guidelines may be removed.\n\n'
                     'By confirming your room creation, you agree to\n'
                     'these terms and conditions.',
                     style: TextStyle(
