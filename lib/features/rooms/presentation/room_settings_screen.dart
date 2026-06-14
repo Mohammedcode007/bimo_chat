@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/responsive.dart';
 import '../logic/rooms_provider.dart';
+import '../logic/room_admin_provider.dart';
 
 class RoomSettingsScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -26,6 +27,8 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     super.initState();
 
     Future.microtask(() {
+      ref.read(roomAdminProvider.notifier).attachListeners();
+
       final roomsState = ref.read(roomsProvider);
 
       final room = roomsState.rooms.where((item) {
@@ -40,10 +43,16 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    ref.read(roomAdminProvider.notifier).disposeListeners();
+    super.dispose();
+  }
+
   void showSnack(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(text),
+        content: Text(text, textDirection: TextDirection.rtl),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -60,9 +69,7 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
           content: TextField(
             controller: controller,
             obscureText: true,
-            decoration: const InputDecoration(
-              hintText: 'Enter password',
-            ),
+            decoration: const InputDecoration(hintText: 'Enter password'),
           ),
           actions: [
             TextButton(
@@ -88,6 +95,8 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
       },
     );
 
+    controller.dispose();
+
     if (!mounted || result == null) return;
 
     if (result == 'remove') {
@@ -101,10 +110,9 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
       return;
     }
 
-    ref.read(roomsProvider.notifier).setPassword(
-          roomId: widget.roomId,
-          password: result.trim(),
-        );
+    ref
+        .read(roomsProvider.notifier)
+        .setPassword(roomId: widget.roomId, password: result.trim());
 
     showSnack('تم إرسال تغيير الباسورد');
   }
@@ -128,9 +136,7 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
             controller: controller,
             minLines: 2,
             maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'Write pinned message',
-            ),
+            decoration: const InputDecoration(hintText: 'Write pinned message'),
           ),
           actions: [
             TextButton(
@@ -150,12 +156,13 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
       },
     );
 
+    controller.dispose();
+
     if (!mounted || result == null) return;
 
-    ref.read(roomsProvider.notifier).setPinnedMessage(
-          roomId: widget.roomId,
-          text: result,
-        );
+    ref
+        .read(roomsProvider.notifier)
+        .setPinnedMessage(roomId: widget.roomId, text: result);
 
     showSnack('تم إرسال الرسالة المثبتة');
   }
@@ -165,10 +172,9 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
       localMembersOnly = value;
     });
 
-    ref.read(roomsProvider.notifier).setRoomLock(
-          roomId: widget.roomId,
-          locked: value,
-        );
+    ref
+        .read(roomsProvider.notifier)
+        .setRoomLock(roomId: widget.roomId, locked: value);
 
     showSnack(value ? 'تم قفل الغرفة للأعضاء فقط' : 'تم فتح الغرفة للجميع');
   }
@@ -183,6 +189,136 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     showSnack('تم إرسال Boost للغرفة');
   }
 
+  void openActiveUsersSheet(List<Map<String, dynamic>> activeUsers) {
+    showUsersSheet(
+      title: 'Active Users',
+      users: activeUsers,
+      emptyText: 'لا يوجد مستخدمين نشطين الآن',
+      canRemoveRole: false,
+    );
+  }
+
+  void openRoleSheet({required String title, required String role}) {
+    ref
+        .read(roomAdminProvider.notifier)
+        .listRoomRoles(roomId: widget.roomId, role: role);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final adminState = ref.watch(roomAdminProvider);
+            final users =
+                adminState.roleUsersByRoom['${widget.roomId}_$role'] ?? [];
+
+            return _UsersSheetContent(
+              title: title,
+              loading: adminState.loading,
+              users: users,
+              emptyText: 'لا يوجد مستخدمين هنا',
+              canRemoveRole: role != 'creator',
+              onRemoveRole: (user) {
+                final userId = _s(user['userId']);
+                final username = _s(user['username'], fallback: 'User');
+
+                if (userId.isEmpty) return;
+
+                ref
+                    .read(roomAdminProvider.notifier)
+                    .removeRoomRole(
+                      roomId: widget.roomId,
+                      targetUserId: userId,
+                      targetUsername: username,
+                    );
+
+                showSnack('تم إرسال طلب حذف الرتبة');
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void openBannedSheet() {
+    ref.read(roomAdminProvider.notifier).listRoomBanned(roomId: widget.roomId);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final adminState = ref.watch(roomAdminProvider);
+
+            final banned = adminState.bannedByRoom[widget.roomId] ?? {};
+            final bannedUsers = _readAnyMapList(banned['bannedUsers']);
+
+            final ipsRaw = banned['bannedIps'];
+            final bannedIps = ipsRaw is List
+                ? ipsRaw.map((item) => item.toString()).toList()
+                : <String>[];
+
+            return _BannedSheetContent(
+              loading: adminState.loading,
+              bannedUsers: bannedUsers,
+              bannedIps: bannedIps,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void openLogsSheet() {
+    ref
+        .read(roomAdminProvider.notifier)
+        .listRoomLogs(roomId: widget.roomId, limit: 50);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final adminState = ref.watch(roomAdminProvider);
+            final logs = adminState.logsByRoom[widget.roomId] ?? [];
+
+            return _LogsSheetContent(loading: adminState.loading, logs: logs);
+          },
+        );
+      },
+    );
+  }
+
+  void showUsersSheet({
+    required String title,
+    required List<Map<String, dynamic>> users,
+    required String emptyText,
+    required bool canRemoveRole,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        return _UsersSheetContent(
+          title: title,
+          loading: false,
+          users: users,
+          emptyText: emptyText,
+          canRemoveRole: canRemoveRole,
+          onRemoveRole: null,
+        );
+      },
+    );
+  }
+
   void notReady(String title) {
     showSnack('$title غير مربوط حاليًا');
   }
@@ -191,7 +327,17 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+
     final roomsState = ref.watch(roomsProvider);
+    final adminState = ref.watch(roomAdminProvider);
+
+    ref.listen(roomAdminProvider, (previous, next) {
+      final error = next.error?.trim();
+
+      if (error != null && error.isNotEmpty) {
+        showSnack(error);
+      }
+    });
 
     final room = roomsState.rooms.where((item) {
       return item.roomId == widget.roomId;
@@ -205,6 +351,15 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     final isFavorite = room?.isFavorite == true;
     final boostScore = room?.boostScore ?? 0;
     final favoriteCount = room?.favoriteCount ?? 0;
+
+    final owners = adminState.roleUsersByRoom['${widget.roomId}_owner'] ?? [];
+    final admins = adminState.roleUsersByRoom['${widget.roomId}_admin'] ?? [];
+    final members = adminState.roleUsersByRoom['${widget.roomId}_member'] ?? [];
+
+    final banned = adminState.bannedByRoom[widget.roomId] ?? {};
+    final bannedUsers = _readAnyMapList(banned['bannedUsers']);
+
+    final logs = adminState.logsByRoom[widget.roomId] ?? [];
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -282,37 +437,53 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
             _SettingsTextTile(
               title: 'Active Users',
               subtitle: '${activeUsers.length}',
-              onTap: () => notReady('Active Users list'),
+              onTap: () => openActiveUsersSheet(activeUsers),
             ),
 
             _SettingsTextTile(
               title: 'Owners',
-              subtitle: 'Manage owners from room users menu',
-              onTap: () => notReady('Owners'),
+              subtitle: owners.isEmpty
+                  ? 'Tap to load owners'
+                  : '${owners.length} owners',
+              onTap: () {
+                openRoleSheet(title: 'Owners', role: 'owner');
+              },
             ),
 
             _SettingsTextTile(
               title: 'Admins',
-              subtitle: 'Manage admins from room users menu',
-              onTap: () => notReady('Admins'),
+              subtitle: admins.isEmpty
+                  ? 'Tap to load admins'
+                  : '${admins.length} admins',
+              onTap: () {
+                openRoleSheet(title: 'Admins', role: 'admin');
+              },
             ),
 
             _SettingsTextTile(
               title: 'Members',
-              subtitle: 'Manage members from room users menu',
-              onTap: () => notReady('Members'),
+              subtitle: members.isEmpty
+                  ? 'Tap to load members'
+                  : '${members.length} members',
+              onTap: () {
+                openRoleSheet(title: 'Members', role: 'member');
+              },
             ),
 
             _SettingsTextTile(
               title: 'Outcasts',
-              subtitle: 'Banned users and IP list',
-              onTap: () => notReady('Outcasts'),
+              subtitle: bannedUsers.isEmpty
+                  ? 'Banned users and IP list'
+                  : '${bannedUsers.length} banned users',
+              onTap: openBannedSheet,
             ),
 
             _SettingsTextTile(
               title: 'Room Logs',
-              subtitle: 'Role logs and room actions',
-              onTap: () => notReady('Room Logs'),
+              subtitle: logs.isEmpty
+                  ? 'Role logs and room actions'
+                  : '${logs.length} logs',
+              onTap: openLogsSheet,
             ),
 
             _SettingsTextTile(
@@ -330,6 +501,398 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
               isDanger: true,
               onTap: () => notReady('Reset Room'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UsersSheetContent extends StatelessWidget {
+  final String title;
+  final bool loading;
+  final List<Map<String, dynamic>> users;
+  final String emptyText;
+  final bool canRemoveRole;
+  final ValueChanged<Map<String, dynamic>>? onRemoveRole;
+
+  const _UsersSheetContent({
+    required this.title,
+    required this.loading,
+    required this.users,
+    required this.emptyText,
+    required this.canRemoveRole,
+    required this.onRemoveRole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                R.size(context, 18),
+                R.size(context, 8),
+                R.size(context, 18),
+                R.size(context, 14),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 24),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    users.length.toString(),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 18),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (loading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else if (users.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    emptyText,
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 18),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  itemCount: users.length,
+                  separatorBuilder: (_, __) {
+                    return Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                    );
+                  },
+                  itemBuilder: (context, index) {
+                    final user = users[index];
+
+                    final userId = _s(user['userId']);
+                    final username = _s(user['username'], fallback: 'User');
+                    final photoUrl = _s(user['photoUrl']);
+                    final role = _s(user['role'], fallback: 'none');
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: photoUrl.isNotEmpty
+                            ? NetworkImage(photoUrl)
+                            : null,
+                        child: photoUrl.isEmpty
+                            ? Text(username.characters.first)
+                            : null,
+                      ),
+                      title: Text(
+                        username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        userId.isNotEmpty ? '$userId • $role' : role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: canRemoveRole
+                          ? TextButton(
+                              onPressed: onRemoveRole == null
+                                  ? null
+                                  : () {
+                                      onRemoveRole!(user);
+                                    },
+                              child: const Text('Remove'),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BannedSheetContent extends StatelessWidget {
+  final bool loading;
+  final List<Map<String, dynamic>> bannedUsers;
+  final List<String> bannedIps;
+
+  const _BannedSheetContent({
+    required this.loading,
+    required this.bannedUsers,
+    required this.bannedIps,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                R.size(context, 18),
+                R.size(context, 8),
+                R.size(context, 18),
+                R.size(context, 14),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Outcasts',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 24),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${bannedUsers.length} users',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 18),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (loading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else
+              Expanded(
+                child: ListView(
+                  children: [
+                    Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(
+                        R.size(context, 18),
+                        R.size(context, 10),
+                        R.size(context, 18),
+                        R.size(context, 8),
+                      ),
+                      child: Text(
+                        'Banned Users',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: R.sp(context, 20),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (bannedUsers.isEmpty)
+                      Padding(
+                        padding: EdgeInsetsDirectional.symmetric(
+                          horizontal: R.size(context, 18),
+                          vertical: R.size(context, 14),
+                        ),
+                        child: Text(
+                          'لا يوجد محظورين',
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: R.sp(context, 17),
+                          ),
+                        ),
+                      )
+                    else
+                      ...bannedUsers.map((user) {
+                        final userId = _s(user['userId']);
+                        final username = _s(user['username'], fallback: 'User');
+                        final photoUrl = _s(user['photoUrl']);
+
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: photoUrl.isNotEmpty
+                                ? NetworkImage(photoUrl)
+                                : null,
+                            child: photoUrl.isEmpty
+                                ? Text(username.characters.first)
+                                : null,
+                          ),
+                          title: Text(username),
+                          subtitle: Text(userId),
+                        );
+                      }),
+
+                    Padding(
+                      padding: EdgeInsetsDirectional.fromSTEB(
+                        R.size(context, 18),
+                        R.size(context, 20),
+                        R.size(context, 18),
+                        R.size(context, 8),
+                      ),
+                      child: Text(
+                        'Banned IPs',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: R.sp(context, 20),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (bannedIps.isEmpty)
+                      Padding(
+                        padding: EdgeInsetsDirectional.symmetric(
+                          horizontal: R.size(context, 18),
+                          vertical: R.size(context, 14),
+                        ),
+                        child: Text(
+                          'لا توجد IPs محظورة',
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: R.sp(context, 17),
+                          ),
+                        ),
+                      )
+                    else
+                      ...bannedIps.map((ip) {
+                        return ListTile(
+                          leading: const Icon(Icons.public_off_rounded),
+                          title: Text(ip),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LogsSheetContent extends StatelessWidget {
+  final bool loading;
+  final List<Map<String, dynamic>> logs;
+
+  const _LogsSheetContent({required this.loading, required this.logs});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                R.size(context, 18),
+                R.size(context, 8),
+                R.size(context, 18),
+                R.size(context, 14),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Room Logs',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 24),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    logs.length.toString(),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 18),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (loading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else if (logs.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'لا توجد لوجات',
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 18),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  itemCount: logs.length,
+                  separatorBuilder: (_, __) {
+                    return Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                    );
+                  },
+                  itemBuilder: (context, index) {
+                    final log = logs[index];
+
+                    final actorUsername = _s(
+                      log['actorUsername'],
+                      fallback: 'User',
+                    );
+                    final targetUsername = _s(
+                      log['targetUsername'],
+                      fallback: 'User',
+                    );
+                    final oldRole = _s(log['oldRole'], fallback: 'none');
+                    final newRole = _s(log['newRole'], fallback: 'none');
+                    final createdAt = _s(log['createdAt']);
+
+                    return ListTile(
+                      leading: const Icon(Icons.history_rounded),
+                      title: Text(
+                        '$actorUsername → $targetUsername',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        '$oldRole → $newRole${createdAt.isNotEmpty ? ' • $createdAt' : ''}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -465,4 +1028,23 @@ class _SettingsTextTile extends StatelessWidget {
       ),
     );
   }
+}
+
+List<Map<String, dynamic>> _readAnyMapList(dynamic value) {
+  if (value is! List) {
+    return <Map<String, dynamic>>[];
+  }
+
+  return value
+      .whereType<Map>()
+      .map((item) {
+        return item.map((key, value) => MapEntry(key.toString(), value));
+      })
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+}
+
+String _s(dynamic value, {String fallback = ''}) {
+  final text = (value ?? '').toString().trim();
+  return text.isEmpty ? fallback : text;
 }

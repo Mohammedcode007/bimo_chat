@@ -10,8 +10,8 @@ class WsHandlers {
   static const usersSettingsUpdate = 'users.settings.update';
   static const usersBlock = 'users.block';
   static const usersUnblock = 'users.unblock';
-static const dmOpen = 'dm.open';
-static const dmClose = 'dm.close';
+  static const dmOpen = 'dm.open';
+  static const dmClose = 'dm.close';
   static const friendRequestRespond = 'friend.request.respond';
 
   static const storeItemsList = 'store.items.list';
@@ -56,4 +56,9 @@ static const dmClose = 'dm.close';
   static const tweetsLike = 'tweets.like';
   static const tweetsComment = 'tweets.comment';
   static const tweetsRetweet = 'tweets.retweet';
+  // الجديد
+  static const roomRolesList = 'room.roles.list';
+  static const roomRoleRemove = 'room.role.remove';
+  static const roomLogsList = 'room.logs.list';
+  static const roomBannedList = 'room.banned.list';
 }

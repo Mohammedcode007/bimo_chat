@@ -27,15 +27,19 @@ class RoomsScreen extends ConsumerStatefulWidget {
 
 class _RoomsScreenState extends ConsumerState<RoomsScreen> {
   RoomFilterType selectedFilter = RoomFilterType.public;
-ui.RoomModel? pendingOpenRoom;
-bool isOpeningRoom = false;
+
+  ui.RoomModel? pendingOpenRoom;
+  bool isOpeningRoom = false;
+
   @override
   void initState() {
     super.initState();
 
     Future.microtask(() {
       ref.read(roomsProvider.notifier).attachRoomSocketListeners();
-      ref.read(roomsProvider.notifier).listRooms(_tabFromFilter(selectedFilter));
+      ref
+          .read(roomsProvider.notifier)
+          .listRooms(_tabFromFilter(selectedFilter));
     });
   }
 
@@ -85,15 +89,25 @@ bool isOpeningRoom = false;
     final name = room.name.toString().trim();
     final avatarText = name.isNotEmpty ? name.characters.first : 'غ';
 
+    final roleText = room.role.toString().trim();
+
     return ui.RoomModel(
       id: room.roomId,
       name: name,
       membersCount: activeCount,
       rank: index + 1,
+
+      // مهم حتى نعرف هل هو creator أم لا
+      role: roleText.isEmpty ? 'none' : roleText,
+
       isVerified: room.boostScore > 0,
       isActive: activeCount > 0,
       isVoice: room.voiceEnabled == true,
       isFavorite: room.isFavorite == true,
+
+      hasPassword: room.hasPassword == true,
+      isLockedForNone: room.isLockedForNone == true,
+
       avatarColor: _avatarColor(room.roomId),
       avatarText: avatarText,
       showGroupIcon: false,
@@ -105,7 +119,9 @@ bool isOpeningRoom = false;
       context,
       MaterialPageRoute(builder: (_) => const CreateRoomScreen()),
     ).then((_) {
-      ref.read(roomsProvider.notifier).listRooms(_tabFromFilter(selectedFilter));
+      ref
+          .read(roomsProvider.notifier)
+          .listRooms(_tabFromFilter(selectedFilter));
     });
   }
 
@@ -122,75 +138,166 @@ bool isOpeningRoom = false;
       MaterialPageRoute(builder: (_) => const RoomsSearchScreen()),
     );
   }
-String roomErrorText(String error) {
-  final value = error.trim();
-  final lower = value.toLowerCase();
 
-  if (lower == 'room_banned' ||
-      lower == 'banned' ||
-      lower == 'you_are_banned' ||
-      lower == 'user_banned' ||
-      value == 'ROOM_BANNED' ||
-      value == 'BANNED') {
-    return 'أنت محظور من هذه الغرفة';
+  String roomErrorText(String error) {
+    final value = error.trim();
+    final lower = value.toLowerCase();
+
+    if (lower == 'room_banned' ||
+        lower == 'banned' ||
+        lower == 'you_are_banned' ||
+        lower == 'user_banned' ||
+        value == 'ROOM_BANNED' ||
+        value == 'BANNED') {
+      return 'أنت محظور من هذه الغرفة';
+    }
+
+    if (lower == 'room_not_found') {
+      return 'الغرفة غير موجودة';
+    }
+
+    if (lower == 'room_password_required' || lower == 'password_required') {
+      return 'هذه الغرفة تحتاج كلمة مرور';
+    }
+
+    if (lower == 'wrong_room_password' ||
+        lower == 'invalid_room_password' ||
+        lower == 'wrong_password' ||
+        lower == 'invalid_password') {
+      return 'كلمة مرور الغرفة غير صحيحة';
+    }
+
+    if (lower == 'room_locked_for_none' ||
+        lower == 'room_locked_for_members_only' ||
+        lower == 'members_only' ||
+        lower == 'members_only_room') {
+      return 'هذه الغرفة للأعضاء فقط';
+    }
+
+    if (lower == 'room_join_failed') {
+      return 'تعذر دخول الغرفة';
+    }
+
+    if (lower == 'room_not_joined') {
+      return 'يجب دخول الغرفة أولًا';
+    }
+
+    if (value.isEmpty || lower == 'null' || lower == 'undefined') {
+      return 'حدث خطأ';
+    }
+
+    return value;
   }
 
-  if (lower == 'room_not_found') {
-    return 'الغرفة غير موجودة';
+  bool isRealRoomError(String? error) {
+    final value = (error ?? '').trim();
+
+    if (value.isEmpty) return false;
+
+    final lower = value.toLowerCase();
+
+    if (lower == 'null') return false;
+    if (lower == 'undefined') return false;
+    if (lower == 'none') return false;
+
+    return true;
   }
 
-  if (lower == 'room_password_required' ||
-      lower == 'password_required') {
-    return 'هذه الغرفة تحتاج كلمة مرور';
-  }
+  Future<String?> openRoomPasswordDialog(ui.RoomModel room) async {
+    final controller = TextEditingController();
 
-  if (lower == 'invalid_room_password' ||
-      lower == 'wrong_password') {
-    return 'كلمة مرور الغرفة غير صحيحة';
-  }
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
 
-  if (lower == 'room_join_failed') {
-    return 'تعذر دخول الغرفة';
-  }
-
-  if (lower == 'room_not_joined') {
-    return 'يجب دخول الغرفة أولًا';
-  }
-
-if (value.isEmpty || lower == 'null' || lower == 'undefined') {
-  return 'حدث خطأ';
-}
-
-return value;
-}
-
-bool isRealRoomError(String? error) {
-  final value = (error ?? '').trim();
-
-  if (value.isEmpty) return false;
-
-  final lower = value.toLowerCase();
-
-  if (lower == 'null') return false;
-  if (lower == 'undefined') return false;
-  if (lower == 'none') return false;
-
-  return true;
-}
-
-void openRoom(ui.RoomModel room) {
-  if (isOpeningRoom) return;
-
-  pendingOpenRoom = room;
-  isOpeningRoom = true;
-
-  ref.read(roomsProvider.notifier).joinRoom(roomId: room.id);
-}
-  void openSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => SettingScreen()),
+        return AlertDialog(
+          title: Text(
+            'كلمة مرور الغرفة',
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            autofocus: true,
+            textDirection: TextDirection.ltr,
+            decoration: InputDecoration(
+              hintText: 'اكتب كلمة المرور',
+              prefixIcon: const Icon(Icons.lock_outline),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onSubmitted: (value) {
+              Navigator.pop(context, value.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context, controller.text.trim());
+              },
+              child: const Text('دخول'),
+            ),
+          ],
+        );
+      },
     );
+
+    controller.dispose();
+
+    final password = result?.trim();
+
+    if (password == null || password.isEmpty) {
+      return null;
+    }
+
+    return password;
+  }
+
+  Future<void> openRoom(ui.RoomModel room) async {
+    if (isOpeningRoom) return;
+
+    String password = '';
+
+    final isCreator = room.role == 'creator';
+
+    /*
+    Creator يدخل مباشرة حتى لو الغرفة عليها باسورد.
+    باقي الرتب تظهر لهم نافذة الباسورد لو الغرفة hasPassword.
+  */
+    if (room.hasPassword && !isCreator) {
+      final result = await openRoomPasswordDialog(room);
+
+      if (result == null || result.isEmpty) {
+        return;
+      }
+
+      password = result;
+    }
+
+    pendingOpenRoom = room;
+    isOpeningRoom = true;
+
+    ref
+        .read(roomsProvider.notifier)
+        .joinRoom(roomId: room.id, password: password);
+  }
+
+  void openSettings() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => SettingScreen()));
   }
 
   void logout() {
@@ -213,11 +320,8 @@ void openRoom(ui.RoomModel room) {
         .asMap()
         .entries
         .map(
-          (entry) => _toUiRoom(
-            entry.value,
-            entry.key,
-            roomsState.activeCountByRoom,
-          ),
+          (entry) =>
+              _toUiRoom(entry.value, entry.key, roomsState.activeCountByRoom),
         )
         .toList();
 
@@ -245,49 +349,45 @@ void openRoom(ui.RoomModel room) {
       }
     });
 
-ref.listen<RoomsState>(roomsProvider, (previous, next) {
-  final error = next.error;
+    ref.listen<RoomsState>(roomsProvider, (previous, next) {
+      final error = next.error;
 
-  if (isRealRoomError(error)) {
-    isOpeningRoom = false;
-    pendingOpenRoom = null;
+      if (isRealRoomError(error)) {
+        isOpeningRoom = false;
+        pendingOpenRoom = null;
 
-    final message = roomErrorText(error!);
+        final message = roomErrorText(error!);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          textDirection: TextDirection.rtl,
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message, textDirection: TextDirection.rtl),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
 
-    return;
-  }
+        return;
+      }
 
-  final roomToOpen = pendingOpenRoom;
+      final roomToOpen = pendingOpenRoom;
 
-  if (roomToOpen == null) return;
+      if (roomToOpen == null) return;
 
-  final joinedByActiveRoom = next.activeRoomId == roomToOpen.id;
+      final joinedByActiveRoom = next.activeRoomId == roomToOpen.id;
 
-  final usersInRoom = next.usersByRoom[roomToOpen.id] ?? [];
-  final joinedByUsersList = usersInRoom.isNotEmpty;
+      final usersInRoom = next.usersByRoom[roomToOpen.id] ?? [];
+      final joinedByUsersList = usersInRoom.isNotEmpty;
 
-  if (!joinedByActiveRoom && !joinedByUsersList) return;
+      if (!joinedByActiveRoom && !joinedByUsersList) return;
 
-  pendingOpenRoom = null;
-  isOpeningRoom = false;
+      pendingOpenRoom = null;
+      isOpeningRoom = false;
 
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => RoomChatScreen(room: roomToOpen),
-    ),
-  );
-}); 
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => RoomChatScreen(room: roomToOpen)),
+      );
+    });
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
@@ -306,41 +406,36 @@ ref.listen<RoomsState>(roomsProvider, (previous, next) {
           ),
           Expanded(
             child: roomsState.loading
-                ? const Center(
-                    child: CircularProgressIndicator(),
-                  )
+                ? const Center(child: CircularProgressIndicator())
                 : rooms.isEmpty
-                    ? Center(
-                        child: Text(
-                          'لا توجد غرف الآن',
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.color,
-                            fontSize: 15,
-                          ),
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () async {
-                          ref
-                              .read(roomsProvider.notifier)
-                              .listRooms(_tabFromFilter(selectedFilter));
-                        },
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          itemCount: rooms.length,
-                          itemBuilder: (context, index) {
-                            final room = rooms[index];
-
-                            return RoomCard(
-                              room: room,
-                              onTap: () => openRoom(room),
-                            );
-                          },
-                        ),
+                ? Center(
+                    child: Text(
+                      'لا توجد غرف الآن',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                        fontSize: 15,
                       ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      ref
+                          .read(roomsProvider.notifier)
+                          .listRooms(_tabFromFilter(selectedFilter));
+                    },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      itemCount: rooms.length,
+                      itemBuilder: (context, index) {
+                        final room = rooms[index];
+
+                        return RoomCard(
+                          room: room,
+                          onTap: () => openRoom(room),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),

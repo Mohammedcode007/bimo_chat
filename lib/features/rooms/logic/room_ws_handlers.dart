@@ -11,6 +11,30 @@ class RoomWsHandlers {
 
   /*
     الجديد:
+    جلب كل المستخدمين حسب الرتبة.
+    role = owner / admin / member / creator
+  */
+  static const roomRolesList = 'room.roles.list';
+
+  /*
+    الجديد:
+    حذف أي رتبة من المستخدم وإرجاعه none.
+  */
+  static const roomRoleRemove = 'room.role.remove';
+
+  /*
+    الجديد:
+    جلب لوجات الغرفة.
+  */
+  static const roomLogsList = 'room.logs.list';
+
+  /*
+    الجديد:
+    جلب المحظورين من الغرفة.
+  */
+  static const roomBannedList = 'room.banned.list';
+
+  /*
     يستخدم مع الباك الجديد.
   */
   static const roomKick = 'room.kick';
