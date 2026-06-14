@@ -267,35 +267,106 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     return password;
   }
 
-  Future<void> openRoom(ui.RoomModel room) async {
-    if (isOpeningRoom) return;
+  Future<void> openMembersOnlyDialog() async {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    String password = '';
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            'الغرفة للأعضاء فقط',
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            'لا يمكنك دخول هذه الغرفة الآن لأنها مخصصة للأعضاء فقط.',
+            textDirection: TextDirection.rtl,
+            style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.4),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('حسنًا'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-    final isCreator = room.role == 'creator';
+Future<void> openRoom(ui.RoomModel room) async {
+  if (isOpeningRoom) return;
 
-    /*
+  final roomsState = ref.read(roomsProvider);
+
+  final usersInRoom = roomsState.usersByRoom[room.id] ?? [];
+  final isAlreadyActiveRoom = roomsState.activeRoomId == room.id;
+  final isAlreadyInRoom = isAlreadyActiveRoom || usersInRoom.isNotEmpty;
+
+  /*
+    لو أنت بالفعل داخل الغرفة:
+    لا تعمل join مرة ثانية.
+    افتح صفحة الدردشة مباشرة.
+  */
+  if (isAlreadyInRoom) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoomChatScreen(room: room),
+      ),
+    );
+    return;
+  }
+
+  String password = '';
+
+  final isCreator = room.role == 'creator';
+  final isRankedUser =
+      room.role == 'creator' ||
+      room.role == 'owner' ||
+      room.role == 'admin' ||
+      room.role == 'member';
+
+  /*
+    لو الغرفة Members Only والمستخدم none
+    لا نرسل join أصلاً.
+    نعرض مودال فقط.
+  */
+  if (room.isLockedForNone && !isRankedUser) {
+    await openMembersOnlyDialog();
+    return;
+  }
+
+  /*
     Creator يدخل مباشرة حتى لو الغرفة عليها باسورد.
     باقي الرتب تظهر لهم نافذة الباسورد لو الغرفة hasPassword.
   */
-    if (room.hasPassword && !isCreator) {
-      final result = await openRoomPasswordDialog(room);
+  if (room.hasPassword && !isCreator) {
+    final result = await openRoomPasswordDialog(room);
 
-      if (result == null || result.isEmpty) {
-        return;
-      }
-
-      password = result;
+    if (result == null || result.isEmpty) {
+      return;
     }
 
-    pendingOpenRoom = room;
-    isOpeningRoom = true;
-
-    ref
-        .read(roomsProvider.notifier)
-        .joinRoom(roomId: room.id, password: password);
+    password = result;
   }
 
+  pendingOpenRoom = room;
+  isOpeningRoom = true;
+
+  ref.read(roomsProvider.notifier).joinRoom(
+        roomId: room.id,
+        password: password,
+      );
+}
   void openSettings() {
     Navigator.push(context, MaterialPageRoute(builder: (_) => SettingScreen()));
   }
@@ -357,6 +428,16 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
         pendingOpenRoom = null;
 
         final message = roomErrorText(error!);
+
+        final lower = error!.trim().toLowerCase();
+
+        if (lower == 'room_locked_for_none' ||
+            lower == 'room_locked_for_members_only' ||
+            lower == 'members_only' ||
+            lower == 'members_only_room') {
+          openMembersOnlyDialog();
+          return;
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

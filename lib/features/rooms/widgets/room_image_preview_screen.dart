@@ -13,7 +13,9 @@ class RoomImagePreviewScreen extends StatelessWidget {
   });
 
   bool get isNetworkImage {
-    return imagePath.startsWith('http://') || imagePath.startsWith('https://');
+    final value = imagePath.trim().toLowerCase();
+
+    return value.startsWith('http://') || value.startsWith('https://');
   }
 
   void saveImage(BuildContext context) {
@@ -25,7 +27,10 @@ class RoomImagePreviewScreen extends StatelessWidget {
     );
   }
 
-  Widget buildImage(BuildContext context) {
+  Widget buildImage({
+    required double width,
+    required double height,
+  }) {
     if (imagePath.trim().isEmpty) {
       return const Center(
         child: Icon(
@@ -39,13 +44,19 @@ class RoomImagePreviewScreen extends StatelessWidget {
     if (isNetworkImage) {
       return Image.network(
         imagePath,
+        width: width,
+        height: height,
         fit: BoxFit.contain,
+        alignment: Alignment.center,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
 
           return const Center(
             child: CircularProgressIndicator(
               color: Colors.white,
+              strokeWidth: 2,
             ),
           );
         },
@@ -61,11 +72,14 @@ class RoomImagePreviewScreen extends StatelessWidget {
       );
     }
 
-    final file = File(imagePath);
-
     return Image.file(
-      file,
+      File(imagePath),
+      width: width,
+      height: height,
       fit: BoxFit.contain,
+      alignment: Alignment.center,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
       errorBuilder: (context, error, stackTrace) {
         return const Center(
           child: Icon(
@@ -85,12 +99,26 @@ class RoomImagePreviewScreen extends StatelessWidget {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Center(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 5,
-                child: buildImage(context),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final screenWidth = constraints.maxWidth;
+                final screenHeight = constraints.maxHeight;
+
+                return InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  panEnabled: true,
+                  scaleEnabled: true,
+                  child: SizedBox(
+                    width: screenWidth,
+                    height: screenHeight,
+                    child: buildImage(
+                      width: screenWidth,
+                      height: screenHeight,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
 

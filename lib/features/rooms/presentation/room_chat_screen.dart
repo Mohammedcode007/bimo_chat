@@ -1,5 +1,6 @@
 import 'dart:io';
-
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-
+import 'package:file_picker/file_picker.dart';
 import '../../../core/utils/responsive.dart';
 
 import '../../chats/data/chat_item_model.dart';
@@ -23,7 +24,7 @@ import '../data/room_chat_message_model.dart';
 
 import '../logic/rooms_provider.dart';
 import '../models/room_live_message_model.dart';
-
+import '../../../core/utils/image_picker_helper.dart';
 import '../widgets/active_rooms_drawer.dart';
 import '../widgets/room_chat_header.dart';
 import '../widgets/room_input_bar.dart';
@@ -39,7 +40,10 @@ import 'room_settings_screen.dart';
 class RoomChatScreen extends ConsumerStatefulWidget {
   final RoomModel room;
 
-  const RoomChatScreen({super.key, required this.room});
+  const RoomChatScreen({
+    super.key,
+    required this.room,
+  });
 
   @override
   ConsumerState<RoomChatScreen> createState() => _RoomChatScreenState();
@@ -55,18 +59,22 @@ class _RoomChatScreenState extends ConsumerState<RoomChatScreen> {
 
   bool isRecording = false;
   bool didSendLeave = false;
-
+bool uploadingMedia = false;
   DateTime? recordStartedAt;
 
   String? activeVoicePath;
   bool isPlayingVoice = false;
+Duration activeVoicePosition = Duration.zero;
+Duration activeVoiceDuration = Duration.zero;
 
+StreamSubscription<Duration>? voicePositionSub;
+StreamSubscription<Duration?>? voiceDurationSub;
+StreamSubscription<PlayerState>? voiceStateSub;
   RoomRole myRole = RoomRole.none;
 
   late final RoomChatUserModel me;
 
-  String pinnedHtml =
-      '<br><br><h6><font color="#000000">اللهم صل وسلم على نبينا محمد ﷺ</font></h6>';
+  String pinnedHtml = '';
 
   List<RoomChatMessageModel> localMessages = [];
   List<RoomModel> localActiveRooms = [];
@@ -88,7 +96,41 @@ class _RoomChatScreenState extends ConsumerState<RoomChatScreen> {
     );
 
     localActiveRooms = [widget.room];
+voicePositionSub = audioPlayer.positionStream.listen((position) {
+  if (!mounted) return;
 
+  setState(() {
+    activeVoicePosition = position;
+  });
+});
+
+voiceDurationSub = audioPlayer.durationStream.listen((duration) {
+  if (!mounted) return;
+
+  setState(() {
+    activeVoiceDuration = duration ?? Duration.zero;
+  });
+});
+
+voiceStateSub = audioPlayer.playerStateStream.listen((state) {
+  if (!mounted) return;
+
+  final playing = state.playing;
+
+  if (state.processingState == ProcessingState.completed) {
+    setState(() {
+      isPlayingVoice = false;
+      activeVoicePosition = Duration.zero;
+    });
+
+    audioPlayer.seek(Duration.zero);
+    return;
+  }
+
+  setState(() {
+    isPlayingVoice = playing;
+  });
+});
     /*
       مهم:
       لا تعمل joinRoom هنا لو أنت تعمل joinRoom قبل فتح الشاشة.
@@ -108,7 +150,9 @@ class _RoomChatScreenState extends ConsumerState<RoomChatScreen> {
       زر الرجوع لا يعني خروج من الغرفة.
       الخروج الحقيقي فقط من اختيار leave من القائمة.
     */
-
+voicePositionSub?.cancel();
+voiceDurationSub?.cancel();
+voiceStateSub?.cancel();
     messageController.dispose();
     scrollController.dispose();
     recorder.dispose();
@@ -129,9 +173,11 @@ class _RoomChatScreenState extends ConsumerState<RoomChatScreen> {
 
   String firstLetter(String text) {
     final value = text.trim();
+
     if (value.isEmpty) return '?';
 
     final runes = value.runes.toList();
+
     if (runes.isEmpty) return '?';
 
     return String.fromCharCode(runes.first).toUpperCase();
@@ -198,6 +244,7 @@ class _RoomChatScreenState extends ConsumerState<RoomChatScreen> {
     final badgeValue = (user['badgeValue'] ?? '').toString().trim();
     final badgeName = (user['badgeName'] ?? '').toString().trim();
     final badgeKey = (user['badgeKey'] ?? '').toString().trim();
+
     final verificationType =
         (user['verificationType'] ?? '').toString().trim().toLowerCase();
 
@@ -260,9 +307,8 @@ class _RoomChatScreenState extends ConsumerState<RoomChatScreen> {
             .toString()
             .trim();
 
-    final photoUrl = photoUrlFromUser.isNotEmpty
-        ? photoUrlFromUser
-        : message.fromPhotoUrl.trim();
+    final photoUrl =
+        photoUrlFromUser.isNotEmpty ? photoUrlFromUser : message.fromPhotoUrl;
 
     final accountColor =
         liveUser?['accountColor'] ?? liveUser?['nameColor'] ?? liveUser?['color'];
@@ -304,74 +350,76 @@ RoomChatMessageType typeFromLive(RoomLiveMessageModel message) {
     return RoomChatMessageType.system;
   }
 
-  if (message.type == 'image' || message.type == 'gif') {
+  final type = message.type.trim().toLowerCase();
+
+  if (type == 'image' || type == 'gif' || type == 'video') {
     return RoomChatMessageType.image;
   }
 
-  if (message.type == 'video') {
-    return RoomChatMessageType.image;
+  if (type == 'audio' || type == 'voice') {
+    return RoomChatMessageType.voice;
   }
 
   return RoomChatMessageType.text;
 }
-RoomChatMessageModel messageFromLive(
-  RoomLiveMessageModel message,
-  RoomsState roomsState,
-) {
-  final sender = userFromLiveMessage(message, roomsState);
+  RoomChatMessageModel messageFromLive(
+    RoomLiveMessageModel message,
+    RoomsState roomsState,
+  ) {
+    final sender = userFromLiveMessage(message, roomsState);
 
-  String text = message.text.trim();
+    String text = message.text.trim();
 
-  if (message.messageKind == 'join') {
-    text = '${sender.name} دخل';
+    if (message.messageKind == 'join') {
+      text = '${sender.name} دخل';
+    }
+
+    if (message.messageKind == 'leave') {
+      text = '${sender.name} خرج';
+    }
+
+    /*
+      role لا نعيد كتابته هنا.
+      نترك النص القادم من الباك كما هو:
+      فلان وضع فلان ادمن
+    */
+
+    if (message.mention != null && message.mention!.text.isNotEmpty) {
+      text = '@${message.mention!.username} ${message.mention!.text}';
+    }
+
+    if (message.gift != null) {
+      text = text.isNotEmpty ? text : '🎁 ${message.gift!.name}';
+    }
+
+    if (message.entryVideo != null) {
+      text = text.isNotEmpty ? text : '${sender.name} دخل الغرفة';
+    }
+
+    final isCenterSystemMessage = message.messageKind == 'join' ||
+        message.messageKind == 'leave' ||
+        message.messageKind == 'role' ||
+        message.messageKind == 'system';
+
+    final isMe = !isCenterSystemMessage &&
+        message.fromUserId.isNotEmpty &&
+        roomsState.myUserId.isNotEmpty &&
+        message.fromUserId == roomsState.myUserId;
+
+    return RoomChatMessageModel(
+      id: message.messageId,
+      sender: sender,
+      text: text,
+      type: typeFromLive(message),
+      localPath: message.media?.url,
+      isMe: isMe,
+      createdAt: message.createdAt,
+      systemColor: isCenterSystemMessage
+          ? Theme.of(context).colorScheme.onSurfaceVariant
+          : null,
+    );
   }
 
-  if (message.messageKind == 'leave') {
-    text = '${sender.name} خرج';
-  }
-
-  /*
-    role لا نعيد كتابته هنا.
-    نترك النص القادم من الباك كما هو:
-    فلان وضع فلان ادمن
-  */
-
-  if (message.mention != null && message.mention!.text.isNotEmpty) {
-    text = '@${message.mention!.username} ${message.mention!.text}';
-  }
-
-  if (message.gift != null) {
-    text = text.isNotEmpty ? text : '🎁 ${message.gift!.name}';
-  }
-
-  if (message.entryVideo != null) {
-    text = text.isNotEmpty ? text : '${sender.name} دخل الغرفة';
-  }
-
-  final isCenterSystemMessage =
-      message.messageKind == 'join' ||
-      message.messageKind == 'leave' ||
-      message.messageKind == 'role' ||
-      message.messageKind == 'system';
-
-  final isMe = !isCenterSystemMessage &&
-      message.fromUserId.isNotEmpty &&
-      roomsState.myUserId.isNotEmpty &&
-      message.fromUserId == roomsState.myUserId;
-
-  return RoomChatMessageModel(
-    id: message.messageId,
-    sender: sender,
-    text: text,
-    type: typeFromLive(message),
-    localPath: message.media?.url,
-    isMe: isMe,
-    createdAt: message.createdAt,
-    systemColor: isCenterSystemMessage
-        ? Theme.of(context).colorScheme.onSurfaceVariant
-        : null,
-  );
-}
   List<RoomChatMessageModel> buildMessages(RoomsState roomsState) {
     final liveMessages = roomsState.messagesByRoom[widget.room.id] ?? [];
 
@@ -390,9 +438,12 @@ RoomChatMessageModel messageFromLive(
 
     final users = rawUsers.map((user) {
       final userId = (user['userId'] ?? user['id'] ?? '').toString().trim();
+
       final username =
           (user['username'] ?? user['name'] ?? 'User').toString().trim();
+
       final photoUrl = (user['photoUrl'] ?? user['avatarUrl'] ?? '').toString();
+
       final role = roleFromString((user['role'] ?? 'none').toString());
 
       final accountColor =
@@ -470,13 +521,18 @@ RoomChatMessageModel messageFromLive(
 
       final text = room.pinnedMessage.text.trim();
 
-      if (text.isNotEmpty) {
-        pinnedHtml = text;
-      }
+      /*
+        مهم:
+        لو النص فاضي نخليه فاضي.
+        لا نحتفظ بالرسالة القديمة.
+      */
+      pinnedHtml = text;
 
       myRole = roleFromString(room.role);
       return;
     }
+
+    pinnedHtml = '';
   }
 
   void scrollToBottom({bool jump = false}) {
@@ -520,31 +576,85 @@ RoomChatMessageModel messageFromLive(
     scrollToBottom();
   }
 
-  Future<void> pickImage() async {
-    final image = await imagePicker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
+Future<void> pickImage() async {
+  if (uploadingMedia) return;
+
+  setState(() {
+    uploadingMedia = true;
+  });
+
+  try {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+      withData: true,
     );
 
-    if (image == null) return;
+    if (result == null || result.files.isEmpty) return;
 
-    setState(() {
-      localMessages.add(
-        RoomChatMessageModel(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          sender: me,
-          text: '',
-          type: RoomChatMessageType.image,
-          localPath: image.path,
-          isMe: true,
-          createdAt: DateTime.now(),
-        ),
-      );
-    });
+    final picked = result.files.first;
+
+    final fileName = picked.name.trim().isEmpty
+        ? 'room_image.jpg'
+        : picked.name.trim();
+
+    final lowerName = fileName.toLowerCase();
+
+    final bool isGif = lowerName.endsWith('.gif');
+    final bool isPng = lowerName.endsWith('.png');
+    final bool isWebp = lowerName.endsWith('.webp');
+
+    final String mimeType = isGif
+        ? 'image/gif'
+        : isPng
+            ? 'image/png'
+            : isWebp
+                ? 'image/webp'
+                : 'image/jpeg';
+
+    final String type = isGif ? 'gif' : 'image';
+
+    List<int>? bytes = picked.bytes;
+
+    if (bytes == null && picked.path != null && picked.path!.trim().isNotEmpty) {
+      final file = File(picked.path!);
+
+      if (!await file.exists()) {
+        showMessage('Image file not found');
+        return;
+      }
+
+      bytes = await file.readAsBytes();
+    }
+
+    if (bytes == null || bytes.isEmpty) {
+      showMessage('Image file is empty');
+      return;
+    }
+
+    final mediaBase64 = 'data:$mimeType;base64,${base64Encode(bytes)}';
+
+    await ref.read(roomsProvider.notifier).sendMediaBase64Message(
+          roomId: widget.room.id,
+          type: type,
+          mediaBase64: mediaBase64,
+          fileName: fileName,
+          mimeType: mimeType,
+          sizeBytes: bytes.length,
+        );
 
     scrollToBottom();
+  } catch (error) {
+    print('[ROOM_PICK_MEDIA_BASE64_ERROR] $error');
+    showMessage('Media upload failed');
+  } finally {
+    if (mounted) {
+      setState(() {
+        uploadingMedia = false;
+      });
+    }
   }
-
+}
   Future<void> startRecord() async {
     if (isRecording) return;
 
@@ -556,6 +666,7 @@ RoomChatMessageModel messageFromLive(
     }
 
     final dir = await getTemporaryDirectory();
+
     final path =
         '${dir.path}/room_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
@@ -574,39 +685,57 @@ RoomChatMessageModel messageFromLive(
     });
   }
 
-  Future<void> stopRecordAndSend() async {
-    if (!isRecording) return;
+Future<void> stopRecordAndSend() async {
+  if (!isRecording) return;
 
-    final startedAt = recordStartedAt;
-    final path = await recorder.stop();
+  final startedAt = recordStartedAt;
+  final path = await recorder.stop();
 
-    setState(() {
-      isRecording = false;
-      recordStartedAt = null;
-    });
+  setState(() {
+    isRecording = false;
+    recordStartedAt = null;
+    uploadingMedia = true;
+  });
 
-    if (path == null) return;
+  try {
+    if (path == null || path.trim().isEmpty) return;
+
+    final file = File(path);
+
+    if (!await file.exists()) {
+      showMessage('Voice file not found');
+      return;
+    }
+
+    final bytes = await file.readAsBytes();
+    final sizeBytes = await file.length();
 
     final duration = startedAt == null ? '0:00' : currentDuration(startedAt);
 
-    setState(() {
-      localMessages.add(
-        RoomChatMessageModel(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          sender: me,
-          text: 'Voice message',
-          type: RoomChatMessageType.voice,
-          localPath: path,
+    final mediaBase64 = 'data:audio/m4a;base64,${base64Encode(bytes)}';
+
+    await ref.read(roomsProvider.notifier).sendMediaBase64Message(
+          roomId: widget.room.id,
+          type: 'audio',
+          mediaBase64: mediaBase64,
+          fileName: 'room_voice.m4a',
+          mimeType: 'audio/m4a',
+          sizeBytes: sizeBytes,
           duration: duration,
-          isMe: true,
-          createdAt: DateTime.now(),
-        ),
-      );
-    });
+        );
 
     scrollToBottom();
+  } catch (error) {
+    print('[ROOM_VOICE_BASE64_ERROR] $error');
+    showMessage('Voice upload failed');
+  } finally {
+    if (mounted) {
+      setState(() {
+        uploadingMedia = false;
+      });
+    }
   }
-
+}
   Future<void> cancelRecord() async {
     if (!isRecording) return;
 
@@ -626,7 +755,10 @@ RoomChatMessageModel messageFromLive(
     }
   }
 
-  Future<void> playVoice(String path) async {
+Future<void> playVoice(String path) async {
+  if (path.trim().isEmpty) return;
+
+  try {
     if (activeVoicePath == path && isPlayingVoice) {
       await audioPlayer.pause();
 
@@ -637,7 +769,26 @@ RoomChatMessageModel messageFromLive(
       return;
     }
 
-    if (path.startsWith('http')) {
+    if (activeVoicePath == path && !isPlayingVoice) {
+      await audioPlayer.play();
+
+      setState(() {
+        isPlayingVoice = true;
+      });
+
+      return;
+    }
+
+    await audioPlayer.stop();
+
+    setState(() {
+      activeVoicePath = path;
+      isPlayingVoice = false;
+      activeVoicePosition = Duration.zero;
+      activeVoiceDuration = Duration.zero;
+    });
+
+    if (path.startsWith('http://') || path.startsWith('https://')) {
       await audioPlayer.setUrl(path);
     } else {
       await audioPlayer.setFilePath(path);
@@ -645,22 +796,14 @@ RoomChatMessageModel messageFromLive(
 
     await audioPlayer.play();
 
- setState(() {
-  activeVoicePath = path;
-  isPlayingVoice = true;
-});
-    audioPlayer.playerStateStream.listen((state) {
-      if (!mounted) return;
-
-      if (state.processingState == ProcessingState.completed) {
-        setState(() {
-          isPlayingVoice = false;
-          activeVoicePath = null;
-        });
-      }
+    setState(() {
+      isPlayingVoice = true;
     });
+  } catch (error) {
+    print('[ROOM_PLAY_VOICE_ERROR] $error');
+    showMessage('Voice play failed');
   }
-
+}
   Future<void> pauseVoice() async {
     await audioPlayer.pause();
 
@@ -668,7 +811,13 @@ RoomChatMessageModel messageFromLive(
       isPlayingVoice = false;
     });
   }
+Future<void> seekVoice(Duration position) async {
+  await audioPlayer.seek(position);
 
+  setState(() {
+    activeVoicePosition = position;
+  });
+}
   Future<void> closeVoicePlayer() async {
     await audioPlayer.stop();
 
@@ -767,6 +916,9 @@ RoomChatMessageModel messageFromLive(
   void showAvatarActions(RoomChatUserModel user) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    final canManageUsers = myRole == RoomRole.owner || myRole == RoomRole.admin;
+    final canSetOwner = myRole == RoomRole.owner;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: colorScheme.surface,
@@ -806,7 +958,9 @@ RoomChatMessageModel messageFromLive(
                   onTap: () async {
                     Navigator.pop(context);
 
-                    await Clipboard.setData(ClipboardData(text: user.name));
+                    await Clipboard.setData(
+                      ClipboardData(text: user.name),
+                    );
 
                     showMessage('${user.name} copied');
                   },
@@ -828,6 +982,115 @@ RoomChatMessageModel messageFromLive(
                     handleUserAction(user, RoomUserAction.sendGift);
                   },
                 ),
+                if (canManageUsers) ...[
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.person_add_alt_1_rounded,
+                      color: colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      'Set Member',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      handleUserAction(user, RoomUserAction.setMember);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      'Set Admin',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      handleUserAction(user, RoomUserAction.setAdmin);
+                    },
+                  ),
+                  if (canSetOwner)
+                    ListTile(
+                      leading: Icon(
+                        Icons.star_rounded,
+                        color: colorScheme.onSurface,
+                      ),
+                      title: Text(
+                        'Set Owner',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        handleUserAction(user, RoomUserAction.setOwner);
+                      },
+                    ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.person_remove_rounded,
+                      color: colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      'Remove Role',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      handleUserAction(user, RoomUserAction.removeRole);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.logout_rounded,
+                      color: colorScheme.onSurface,
+                    ),
+                    title: Text(
+                      'Kick',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      handleUserAction(user, RoomUserAction.kick);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.block_rounded,
+                      color: colorScheme.error,
+                    ),
+                    title: Text(
+                      'Ban',
+                      style: TextStyle(
+                        color: colorScheme.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      handleUserAction(user, RoomUserAction.ban);
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -850,20 +1113,22 @@ RoomChatMessageModel messageFromLive(
       isOnline: user.isOnline,
     );
   }
-void openRoomPost() {
-  showMessage('Room post will be added soon');
 
-  /*
-    لاحقًا هنا ستفتح Dialog أو Screen لاختيار فيديو.
-    بعد تجهيز الباك والـ provider ترسل:
-    
-    ref.read(roomsProvider.notifier).createRoomPost(
-      roomId: widget.room.id,
-      videoUrl: videoUrl,
-      text: text,
-    );
-  */
-}
+  void openRoomPost() {
+    showMessage('Room post will be added soon');
+
+    /*
+      لاحقًا هنا ستفتح Dialog أو Screen لاختيار فيديو.
+      بعد تجهيز الباك والـ provider ترسل:
+
+      ref.read(roomsProvider.notifier).createRoomPost(
+        roomId: widget.room.id,
+        videoUrl: videoUrl,
+        text: text,
+      );
+    */
+  }
+
   void handleUserAction(RoomChatUserModel user, RoomUserAction action) {
     switch (action) {
       case RoomUserAction.message:
@@ -877,58 +1142,58 @@ void openRoomPost() {
         );
         break;
 
- case RoomUserAction.kick:
-  ref.read(roomsProvider.notifier).kickUser(
-        roomId: widget.room.id,
-        targetUserId: user.id,
-        targetUsername: user.name,
-      );
-  break;
+      case RoomUserAction.kick:
+        ref.read(roomsProvider.notifier).kickUser(
+              roomId: widget.room.id,
+              targetUserId: user.id,
+              targetUsername: user.name,
+            );
+        break;
 
-case RoomUserAction.ban:
-  ref.read(roomsProvider.notifier).banUser(
-        roomId: widget.room.id,
-        targetUserId: user.id,
-        targetUsername: user.name,
-        banIp: false,
-      );
-  break;
+      case RoomUserAction.ban:
+        ref.read(roomsProvider.notifier).banUser(
+              roomId: widget.room.id,
+              targetUserId: user.id,
+              targetUsername: user.name,
+              banIp: false,
+            );
+        break;
 
-  case RoomUserAction.setMember:
-  ref.read(roomsProvider.notifier).setRole(
-        roomId: widget.room.id,
-        targetUserId: user.id,
-        targetUsername: user.name,
-        newRole: 'member',
-      );
-  break;
+      case RoomUserAction.setMember:
+        ref.read(roomsProvider.notifier).setRole(
+              roomId: widget.room.id,
+              targetUserId: user.id,
+              targetUsername: user.name,
+              newRole: 'member',
+            );
+        break;
 
-   case RoomUserAction.setAdmin:
-  ref.read(roomsProvider.notifier).setRole(
-        roomId: widget.room.id,
-        targetUserId: user.id,
-        targetUsername: user.name,
-        newRole: 'admin',
-      );
-  break;
+      case RoomUserAction.setAdmin:
+        ref.read(roomsProvider.notifier).setRole(
+              roomId: widget.room.id,
+              targetUserId: user.id,
+              targetUsername: user.name,
+              newRole: 'admin',
+            );
+        break;
 
-case RoomUserAction.setOwner:
-  ref.read(roomsProvider.notifier).setRole(
-        roomId: widget.room.id,
-        targetUserId: user.id,
-        targetUsername: user.name,
-        newRole: 'owner',
-      );
-  break;
+      case RoomUserAction.setOwner:
+        ref.read(roomsProvider.notifier).setRole(
+              roomId: widget.room.id,
+              targetUserId: user.id,
+              targetUsername: user.name,
+              newRole: 'owner',
+            );
+        break;
 
-case RoomUserAction.removeRole:
-  ref.read(roomsProvider.notifier).setRole(
-        roomId: widget.room.id,
-        targetUserId: user.id,
-        targetUsername: user.name,
-        newRole: 'none',
-      );
-  break;
+      case RoomUserAction.removeRole:
+        ref.read(roomsProvider.notifier).setRole(
+              roomId: widget.room.id,
+              targetUserId: user.id,
+              targetUsername: user.name,
+              newRole: 'none',
+            );
+        break;
 
       case RoomUserAction.copy:
         Clipboard.setData(ClipboardData(text: user.name));
@@ -1014,7 +1279,9 @@ case RoomUserAction.removeRole:
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             TextButton(
@@ -1135,7 +1402,9 @@ case RoomUserAction.removeRole:
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             TextButton(
@@ -1217,7 +1486,9 @@ case RoomUserAction.removeRole:
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => RoomChatScreen(room: room)),
+      MaterialPageRoute(
+        builder: (_) => RoomChatScreen(room: room),
+      ),
     );
   }
 
@@ -1230,7 +1501,10 @@ case RoomUserAction.removeRole:
       value: value,
       child: Text(
         title,
-        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: textColor,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -1336,6 +1610,8 @@ case RoomUserAction.removeRole:
     final activeCount =
         roomsState.activeCountByRoom[widget.room.id] ?? widget.room.membersCount;
 
+    final hasPinnedMessage = pinnedHtml.trim().isNotEmpty;
+
     ref.listen(roomsProvider, (previous, next) {
       final oldCount = previous?.messagesByRoom[widget.room.id]?.length ?? 0;
       final newCount = next.messagesByRoom[widget.room.id]?.length ?? 0;
@@ -1353,27 +1629,29 @@ case RoomUserAction.removeRole:
       backgroundColor: chatBackgroundColor,
       body: Column(
         children: [
-       RoomChatHeader(
-  roomName: widget.room.name,
-  membersCount: activeCount,
-  isFavorite: widget.room.isFavorite,
-  onRoomsMenuTap: () => openActiveRoomsMenu(activeRooms),
-  onUsersTap: () => openUsersDialog(users),
-  onUploadTap: pickImage,
-  onPostTap: openRoomPost,
-  onMenuSelect: handleRoomMenu,
-),
+          RoomChatHeader(
+            roomName: widget.room.name,
+            membersCount: activeCount,
+            isFavorite: widget.room.isFavorite,
+            onRoomsMenuTap: () => openActiveRoomsMenu(activeRooms),
+            onUsersTap: () => openUsersDialog(users),
+            onUploadTap: pickImage,
+            onPostTap: openRoomPost,
+            onMenuSelect: handleRoomMenu,
+          ),
           if (activeVoicePath != null)
-            RoomVoicePlayerBar(
-              isPlaying: isPlayingVoice,
-              onPlayPause: () {
-                if (activeVoicePath != null) {
-                  playVoice(activeVoicePath!);
-                }
-              },
-              onPause: pauseVoice,
-              onClose: closeVoicePlayer,
-            ),
+        RoomVoicePlayerBar(
+  isPlaying: isPlayingVoice,
+  position: activeVoicePosition,
+  duration: activeVoiceDuration,
+  onPlayPause: () {
+    if (activeVoicePath != null) {
+      playVoice(activeVoicePath!);
+    }
+  },
+  onSeek: seekVoice,
+  onClose: closeVoicePlayer,
+),
           Expanded(
             child: Container(
               color: chatBackgroundColor,
@@ -1383,13 +1661,14 @@ case RoomUserAction.removeRole:
                   top: R.size(context, 14),
                   bottom: R.size(context, 12),
                 ),
-                itemCount: messages.length + 1,
+                itemCount: messages.length + (hasPinnedMessage ? 1 : 0),
                 itemBuilder: (context, index) {
-                  if (index == 0) {
+                  if (hasPinnedMessage && index == 0) {
                     return RoomPinnedHtmlMessage(html: pinnedHtml);
                   }
 
-                  final message = messages[index - 1];
+                  final messageIndex = hasPinnedMessage ? index - 1 : index;
+                  final message = messages[messageIndex];
 
                   return RoomMessageBubble(
                     message: message,
@@ -1403,10 +1682,10 @@ case RoomUserAction.removeRole:
                       showUserNameActions(message.sender);
                     },
                     onAvatarTap: () {
-                      openUserProfile(message.sender);
+                      showAvatarActions(message.sender);
                     },
                     onAvatarLongPress: () {
-                      showAvatarActions(message.sender);
+                      openUserProfile(message.sender);
                     },
                   );
                 },

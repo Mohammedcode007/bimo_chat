@@ -28,7 +28,29 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
 
     Future.microtask(() {
       ref.read(roomAdminProvider.notifier).attachListeners();
+ref.read(roomAdminProvider.notifier).listRoomRoles(
+      roomId: widget.roomId,
+      role: 'owner',
+    );
 
+ref.read(roomAdminProvider.notifier).listRoomRoles(
+      roomId: widget.roomId,
+      role: 'admin',
+    );
+
+ref.read(roomAdminProvider.notifier).listRoomRoles(
+      roomId: widget.roomId,
+      role: 'member',
+    );
+
+ref.read(roomAdminProvider.notifier).listRoomBanned(
+      roomId: widget.roomId,
+    );
+
+ref.read(roomAdminProvider.notifier).listRoomLogs(
+      roomId: widget.roomId,
+      limit: 50,
+    );
       final roomsState = ref.read(roomsProvider);
 
       final room = roomsState.rooms.where((item) {
@@ -57,7 +79,81 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
       ),
     );
   }
+Future<void> openAddUserDialog({
+  required String title,
+  required String action,
+  required String role,
+}) async {
+  final usernameController = TextEditingController();
 
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(
+          title,
+          textDirection: TextDirection.rtl,
+        ),
+        content: TextField(
+          controller: usernameController,
+          autofocus: true,
+          textDirection: TextDirection.rtl,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            hintText: 'اكتب اسم المستخدم فقط',
+          ),
+          onSubmitted: (value) {
+            Navigator.pop(context, value.trim());
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context, usernameController.text.trim());
+            },
+            child: const Text('إضافة'),
+          ),
+        ],
+      );
+    },
+  );
+
+  usernameController.dispose();
+
+  if (!mounted || result == null) return;
+
+  final username = result.trim();
+
+  if (username.isEmpty) {
+    showSnack('اكتب اسم المستخدم');
+    return;
+  }
+
+  if (action == 'ban') {
+    ref.read(roomsProvider.notifier).banUser(
+          roomId: widget.roomId,
+          targetUsername: username,
+          banIp: false,
+        );
+
+    showSnack('تم إرسال طلب الحظر');
+    return;
+  }
+
+  ref.read(roomsProvider.notifier).setRole(
+        roomId: widget.roomId,
+        targetUsername: username,
+        newRole: role,
+      );
+
+  showSnack('تم إرسال طلب الإضافة');
+}
   Future<void> openPasswordDialog() async {
     final controller = TextEditingController();
 
@@ -117,56 +213,78 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     showSnack('تم إرسال تغيير الباسورد');
   }
 
-  Future<void> openPinnedDialog() async {
-    final controller = TextEditingController();
+Future<void> openPinnedDialog() async {
+  final controller = TextEditingController();
 
-    final roomsState = ref.read(roomsProvider);
-    final room = roomsState.rooms.where((item) {
-      return item.roomId == widget.roomId;
-    }).firstOrNull;
+  final roomsState = ref.read(roomsProvider);
+  final room = roomsState.rooms.where((item) {
+    return item.roomId == widget.roomId;
+  }).firstOrNull;
 
-    controller.text = room?.pinnedMessage.text ?? '';
+  controller.text = room?.pinnedMessage.text ?? '';
 
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Pinned Message'),
-          content: TextField(
-            controller: controller,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(hintText: 'Write pinned message'),
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Pinned Message'),
+        content: TextField(
+          controller: controller,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Write pinned message',
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context, controller.text.trim());
-              },
-              child: const Text('Save'),
-            ),
-          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, '__remove__');
+            },
+            child: const Text('Remove'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context, controller.text.trim());
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      );
+    },
+  );
+
+  controller.dispose();
+
+  if (!mounted || result == null) return;
+
+  if (result == '__remove__') {
+    ref.read(roomsProvider.notifier).setPinnedMessage(
+          roomId: widget.roomId,
+          text: '',
         );
-      },
-    );
 
-    controller.dispose();
-
-    if (!mounted || result == null) return;
-
-    ref
-        .read(roomsProvider.notifier)
-        .setPinnedMessage(roomId: widget.roomId, text: result);
-
-    showSnack('تم إرسال الرسالة المثبتة');
+    showSnack('تم إلغاء الرسالة المثبتة');
+    return;
   }
 
+  ref.read(roomsProvider.notifier).setPinnedMessage(
+        roomId: widget.roomId,
+        text: result.trim(),
+      );
+
+  if (result.trim().isEmpty) {
+    showSnack('تم إلغاء الرسالة المثبتة');
+  } else {
+    showSnack('تم إرسال الرسالة المثبتة');
+  }
+}
   void toggleMembersOnly(bool value) {
     setState(() {
       localMembersOnly = value;
@@ -198,82 +316,99 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     );
   }
 
-  void openRoleSheet({required String title, required String role}) {
-    ref
-        .read(roomAdminProvider.notifier)
-        .listRoomRoles(roomId: widget.roomId, role: role);
+void openRoleSheet({
+  required String title,
+  required String role,
+}) {
+  ref.read(roomAdminProvider.notifier).listRoomRoles(
+        roomId: widget.roomId,
+        role: role,
+      );
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final adminState = ref.watch(roomAdminProvider);
-            final users =
-                adminState.roleUsersByRoom['${widget.roomId}_$role'] ?? [];
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) {
+      return Consumer(
+        builder: (context, ref, _) {
+          final adminState = ref.watch(roomAdminProvider);
+          final users =
+              adminState.roleUsersByRoom['${widget.roomId}_$role'] ?? [];
 
-            return _UsersSheetContent(
-              title: title,
-              loading: adminState.loading,
-              users: users,
-              emptyText: 'لا يوجد مستخدمين هنا',
-              canRemoveRole: role != 'creator',
-              onRemoveRole: (user) {
-                final userId = _s(user['userId']);
-                final username = _s(user['username'], fallback: 'User');
+          return _UsersSheetContent(
+            title: title,
+            loading: adminState.loading,
+            users: users,
+            emptyText: 'لا يوجد مستخدمين هنا',
+            canRemoveRole: role != 'creator',
+            showAddButton: true,
+            onAddTap: () {
+              openAddUserDialog(
+                title: 'إضافة $title',
+                action: 'role',
+                role: role,
+              );
+            },
+            onRemoveRole: (user) {
+              final userId = _s(user['userId']);
+              final username = _s(user['username'], fallback: 'User');
 
-                if (userId.isEmpty) return;
+              if (userId.isEmpty) return;
 
-                ref
-                    .read(roomAdminProvider.notifier)
-                    .removeRoomRole(
-                      roomId: widget.roomId,
-                      targetUserId: userId,
-                      targetUsername: username,
-                    );
+              ref.read(roomAdminProvider.notifier).removeRoomRole(
+                    roomId: widget.roomId,
+                    targetUserId: userId,
+                    targetUsername: username,
+                  );
 
-                showSnack('تم إرسال طلب حذف الرتبة');
-              },
-            );
-          },
-        );
-      },
-    );
-  }
+              showSnack('تم إرسال طلب حذف الرتبة');
+            },
+          );
+        },
+      );
+    },
+  );
+}
+void openBannedSheet() {
+  ref.read(roomAdminProvider.notifier).listRoomBanned(
+        roomId: widget.roomId,
+      );
 
-  void openBannedSheet() {
-    ref.read(roomAdminProvider.notifier).listRoomBanned(roomId: widget.roomId);
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) {
+      return Consumer(
+        builder: (context, ref, _) {
+          final adminState = ref.watch(roomAdminProvider);
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final adminState = ref.watch(roomAdminProvider);
+          final banned = adminState.bannedByRoom[widget.roomId] ?? {};
+          final bannedUsers = _readAnyMapList(banned['bannedUsers']);
 
-            final banned = adminState.bannedByRoom[widget.roomId] ?? {};
-            final bannedUsers = _readAnyMapList(banned['bannedUsers']);
+          final ipsRaw = banned['bannedIps'];
+          final bannedIps = ipsRaw is List
+              ? ipsRaw.map((item) => item.toString()).toList()
+              : <String>[];
 
-            final ipsRaw = banned['bannedIps'];
-            final bannedIps = ipsRaw is List
-                ? ipsRaw.map((item) => item.toString()).toList()
-                : <String>[];
-
-            return _BannedSheetContent(
-              loading: adminState.loading,
-              bannedUsers: bannedUsers,
-              bannedIps: bannedIps,
-            );
-          },
-        );
-      },
-    );
-  }
-
+          return _BannedSheetContent(
+            loading: adminState.loading,
+            bannedUsers: bannedUsers,
+            bannedIps: bannedIps,
+            onAddTap: () {
+              openAddUserDialog(
+                title: 'إضافة محظور',
+                action: 'ban',
+                role: 'none',
+              );
+            },
+          );
+        },
+      );
+    },
+  );
+}
   void openLogsSheet() {
     ref
         .read(roomAdminProvider.notifier)
@@ -296,29 +431,30 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
     );
   }
 
-  void showUsersSheet({
-    required String title,
-    required List<Map<String, dynamic>> users,
-    required String emptyText,
-    required bool canRemoveRole,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return _UsersSheetContent(
-          title: title,
-          loading: false,
-          users: users,
-          emptyText: emptyText,
-          canRemoveRole: canRemoveRole,
-          onRemoveRole: null,
-        );
-      },
-    );
-  }
-
+void showUsersSheet({
+  required String title,
+  required List<Map<String, dynamic>> users,
+  required String emptyText,
+  required bool canRemoveRole,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) {
+      return _UsersSheetContent(
+        title: title,
+        loading: false,
+        users: users,
+        emptyText: emptyText,
+        canRemoveRole: canRemoveRole,
+        showAddButton: false,
+        onAddTap: null,
+        onRemoveRole: null,
+      );
+    },
+  );
+}
   void notReady(String title) {
     showSnack('$title غير مربوط حاليًا');
   }
@@ -440,52 +576,39 @@ class _RoomSettingsScreenState extends ConsumerState<RoomSettingsScreen> {
               onTap: () => openActiveUsersSheet(activeUsers),
             ),
 
-            _SettingsTextTile(
-              title: 'Owners',
-              subtitle: owners.isEmpty
-                  ? 'Tap to load owners'
-                  : '${owners.length} owners',
-              onTap: () {
-                openRoleSheet(title: 'Owners', role: 'owner');
-              },
-            ),
+           _SettingsTextTile(
+  title: 'Owners',
+  subtitle: owners.length.toString(),
+  onTap: () {
+    openRoleSheet(title: 'Owners', role: 'owner');
+  },
+),
 
-            _SettingsTextTile(
-              title: 'Admins',
-              subtitle: admins.isEmpty
-                  ? 'Tap to load admins'
-                  : '${admins.length} admins',
-              onTap: () {
-                openRoleSheet(title: 'Admins', role: 'admin');
-              },
-            ),
+_SettingsTextTile(
+  title: 'Admins',
+  subtitle: admins.length.toString(),
+  onTap: () {
+    openRoleSheet(title: 'Admins', role: 'admin');
+  },
+),
 
-            _SettingsTextTile(
-              title: 'Members',
-              subtitle: members.isEmpty
-                  ? 'Tap to load members'
-                  : '${members.length} members',
-              onTap: () {
-                openRoleSheet(title: 'Members', role: 'member');
-              },
-            ),
-
-            _SettingsTextTile(
-              title: 'Outcasts',
-              subtitle: bannedUsers.isEmpty
-                  ? 'Banned users and IP list'
-                  : '${bannedUsers.length} banned users',
-              onTap: openBannedSheet,
-            ),
-
-            _SettingsTextTile(
-              title: 'Room Logs',
-              subtitle: logs.isEmpty
-                  ? 'Role logs and room actions'
-                  : '${logs.length} logs',
-              onTap: openLogsSheet,
-            ),
-
+_SettingsTextTile(
+  title: 'Members',
+  subtitle: members.length.toString(),
+  onTap: () {
+    openRoleSheet(title: 'Members', role: 'member');
+  },
+),
+     _SettingsTextTile(
+  title: 'Outcasts',
+  subtitle: bannedUsers.length.toString(),
+  onTap: openBannedSheet,
+),
+          _SettingsTextTile(
+  title: 'Room Logs',
+  subtitle: logs.length.toString(),
+  onTap: openLogsSheet,
+),
             _SettingsTextTile(
               title: 'Reset banned IP',
               subtitle:
@@ -514,6 +637,8 @@ class _UsersSheetContent extends StatelessWidget {
   final List<Map<String, dynamic>> users;
   final String emptyText;
   final bool canRemoveRole;
+  final bool showAddButton;
+  final VoidCallback? onAddTap;
   final ValueChanged<Map<String, dynamic>>? onRemoveRole;
 
   const _UsersSheetContent({
@@ -522,6 +647,8 @@ class _UsersSheetContent extends StatelessWidget {
     required this.users,
     required this.emptyText,
     required this.canRemoveRole,
+    this.showAddButton = false,
+    this.onAddTap,
     required this.onRemoveRole,
   });
 
@@ -561,11 +688,22 @@ class _UsersSheetContent extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (showAddButton) ...[
+                    SizedBox(width: R.size(context, 8)),
+                    IconButton.filled(
+                      onPressed: onAddTap,
+                      icon: const Icon(Icons.add_rounded),
+                    ),
+                  ],
                 ],
               ),
             ),
             if (loading)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
+              const Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              )
             else if (users.isEmpty)
               Expanded(
                 child: Center(
@@ -592,17 +730,14 @@ class _UsersSheetContent extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final user = users[index];
 
-                    final userId = _s(user['userId']);
                     final username = _s(user['username'], fallback: 'User');
                     final photoUrl = _s(user['photoUrl']);
-                    final role = _s(user['role'], fallback: 'none');
 
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundImage: photoUrl.isNotEmpty
-                            ? NetworkImage(photoUrl)
-                            : null,
-                        child: photoUrl.isEmpty
+                        backgroundImage:
+                            photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                        child: photoUrl.isEmpty && username.isNotEmpty
                             ? Text(username.characters.first)
                             : null,
                       ),
@@ -611,19 +746,17 @@ class _UsersSheetContent extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: Text(
-                        userId.isNotEmpty ? '$userId • $role' : role,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                       trailing: canRemoveRole
-                          ? TextButton(
+                          ? IconButton(
                               onPressed: onRemoveRole == null
                                   ? null
                                   : () {
                                       onRemoveRole!(user);
                                     },
-                              child: const Text('Remove'),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: colorScheme.error,
+                              ),
                             )
                           : null,
                     );
@@ -641,11 +774,13 @@ class _BannedSheetContent extends StatelessWidget {
   final bool loading;
   final List<Map<String, dynamic>> bannedUsers;
   final List<String> bannedIps;
+  final VoidCallback? onAddTap;
 
   const _BannedSheetContent({
     required this.loading,
     required this.bannedUsers,
     required this.bannedIps,
+    this.onAddTap,
   });
 
   @override
@@ -677,18 +812,27 @@ class _BannedSheetContent extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '${bannedUsers.length} users',
+                    '${bannedUsers.length}',
                     style: TextStyle(
                       color: colorScheme.onSurfaceVariant,
                       fontSize: R.sp(context, 18),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  SizedBox(width: R.size(context, 8)),
+                  IconButton.filled(
+                    onPressed: onAddTap,
+                    icon: const Icon(Icons.add_rounded),
+                  ),
                 ],
               ),
             ),
             if (loading)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
+              const Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              )
             else
               Expanded(
                 child: ListView(
@@ -726,7 +870,6 @@ class _BannedSheetContent extends StatelessWidget {
                       )
                     else
                       ...bannedUsers.map((user) {
-                        final userId = _s(user['userId']);
                         final username = _s(user['username'], fallback: 'User');
                         final photoUrl = _s(user['photoUrl']);
 
@@ -735,12 +878,15 @@ class _BannedSheetContent extends StatelessWidget {
                             backgroundImage: photoUrl.isNotEmpty
                                 ? NetworkImage(photoUrl)
                                 : null,
-                            child: photoUrl.isEmpty
+                            child: photoUrl.isEmpty && username.isNotEmpty
                                 ? Text(username.characters.first)
                                 : null,
                           ),
-                          title: Text(username),
-                          subtitle: Text(userId),
+                          title: Text(
+                            username,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         );
                       }),
 
@@ -791,7 +937,6 @@ class _BannedSheetContent extends StatelessWidget {
     );
   }
 }
-
 class _LogsSheetContent extends StatelessWidget {
   final bool loading;
   final List<Map<String, dynamic>> logs;
