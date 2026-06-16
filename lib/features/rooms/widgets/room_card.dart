@@ -25,12 +25,12 @@ class RoomCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(R.size(context, 22)),
           child: Container(
-            constraints: BoxConstraints(minHeight: R.size(context, 104)),
+            constraints: BoxConstraints(minHeight: R.size(context, 108)),
             padding: EdgeInsetsDirectional.fromSTEB(
               R.size(context, 16),
-              R.size(context, 8),
+              R.size(context, 9),
               R.size(context, 16),
-              R.size(context, 8),
+              R.size(context, 9),
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(R.size(context, 22)),
@@ -63,9 +63,9 @@ class RoomCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: colorScheme.onSurface,
-                                fontSize: R.sp(context, 21),
-                                fontWeight: FontWeight.w700,
-                                height: 1.15,
+                                fontSize: R.sp(context, 23),
+                                fontWeight: FontWeight.w800,
+                                height: 1.12,
                               ),
                             ),
                           ),
@@ -79,7 +79,7 @@ class RoomCard extends StatelessWidget {
                                 color: colorScheme.onSurfaceVariant.withValues(
                                   alpha: 0.75,
                                 ),
-                                size: R.size(context, 22),
+                                size: R.size(context, 23),
                               ),
                             ),
                           ],
@@ -93,7 +93,7 @@ class RoomCard extends StatelessWidget {
                                 color: colorScheme.onSurfaceVariant.withValues(
                                   alpha: 0.75,
                                 ),
-                                size: R.size(context, 22),
+                                size: R.size(context, 23),
                               ),
                             ),
                           ],
@@ -109,17 +109,18 @@ class RoomCard extends StatelessWidget {
                             color: colorScheme.onSurfaceVariant.withValues(
                               alpha: 0.55,
                             ),
-                            size: R.size(context, 20),
+                            size: R.size(context, 22),
                           ),
-                          SizedBox(width: R.size(context, 5)),
+                          SizedBox(width: R.size(context, 6)),
                           Text(
                             room.membersCount.toString(),
                             style: TextStyle(
                               color: colorScheme.onSurfaceVariant.withValues(
-                                alpha: 0.65,
+                                alpha: 0.70,
                               ),
-                              fontSize: R.sp(context, 20),
-                              fontWeight: FontWeight.w700,
+                              fontSize: R.sp(context, 22),
+                              fontWeight: FontWeight.w800,
+                              height: 1.1,
                             ),
                           ),
                         ],
@@ -134,8 +135,8 @@ class RoomCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: R.size(context, 48),
-                      height: R.size(context, 48),
+                      width: R.size(context, 50),
+                      height: R.size(context, 50),
                       decoration: BoxDecoration(
                         color: const Color(0xFF9EA0A1).withValues(alpha: 0.85),
                         shape: BoxShape.circle,
@@ -145,8 +146,9 @@ class RoomCard extends StatelessWidget {
                         room.rank.toString(),
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: R.sp(context, 18),
-                          fontWeight: FontWeight.w800,
+                          fontSize: R.sp(context, 20),
+                          fontWeight: FontWeight.w900,
+                          height: 1,
                         ),
                       ),
                     ),
@@ -158,7 +160,7 @@ class RoomCard extends StatelessWidget {
                         color: colorScheme.onSurfaceVariant.withValues(
                           alpha: 0.55,
                         ),
-                        size: R.size(context, 30),
+                        size: R.size(context, 31),
                       ),
                     ],
                   ],

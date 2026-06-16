@@ -447,7 +447,7 @@ class _ChatsHeader extends StatelessWidget {
             style: TextStyle(
               color: colorScheme.primary,
               fontWeight: FontWeight.w900,
-              fontSize: R.sp(context, 16),
+fontSize: R.sp(context, 18),
             ),
           )
         : null,
@@ -461,8 +461,9 @@ class _ChatsHeader extends StatelessWidget {
                 'Chats',
                 style: TextStyle(
                   color: colorScheme.onSurface,
-                  fontSize: R.sp(context, 28),
-                  fontWeight: FontWeight.w800,
+                 fontSize: R.sp(context, 31),
+fontWeight: FontWeight.w900,
+height: 1.05,
                 ),
               ),
             ),
@@ -510,7 +511,7 @@ class _ChatsSearchBar extends StatelessWidget {
         R.size(context, 12),
       ),
       child: Container(
-        height: R.size(context, 46),
+        height: R.size(context, 54),
         padding: EdgeInsetsDirectional.symmetric(
           horizontal: R.size(context, 14),
         ),
@@ -520,20 +521,35 @@ class _ChatsSearchBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.search_rounded,
-              color: colorScheme.onSurface.withValues(alpha: 0.55),
-            ),
+          Icon(
+  Icons.search_rounded,
+  size: R.size(context, 25),
+  color: colorScheme.onSurface.withValues(alpha: 0.55),
+),
             SizedBox(width: R.size(context, 8)),
             Expanded(
               child: TextField(
-                controller: controller,
-                onChanged: onChanged,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Search chats',
-                ),
-              ),
+  controller: controller,
+  onChanged: onChanged,
+  style: TextStyle(
+    color: colorScheme.onSurface,
+    fontSize: R.sp(context, 18),
+    fontWeight: FontWeight.w600,
+    height: 1.15,
+  ),
+  decoration: InputDecoration(
+    border: InputBorder.none,
+    hintText: 'Search chats',
+    hintStyle: TextStyle(
+      color: colorScheme.onSurface.withValues(alpha: 0.55),
+      fontSize: R.sp(context, 18),
+      fontWeight: FontWeight.w600,
+      height: 1.15,
+    ),
+    isDense: true,
+    contentPadding: EdgeInsets.zero,
+  ),
+),
             ),
           ],
         ),
@@ -658,7 +674,8 @@ class _DmChatTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: colorScheme.onSurface,
-                        fontSize: R.sp(context, 16),
+fontSize: R.sp(context, 25),
+height: 1.1,
                         fontWeight: hasUnread
                             ? FontWeight.w800
                             : FontWeight.w700,
@@ -693,7 +710,8 @@ class _DmChatTile extends StatelessWidget {
                                   : colorScheme.onSurface.withValues(
                                       alpha: 0.58,
                                     ),
-                              fontSize: R.sp(context, 13),
+fontSize: R.sp(context, 18),
+height: 1.15,
                               fontWeight: hasUnread
                                   ? FontWeight.w700
                                   : FontWeight.w500,
@@ -717,7 +735,8 @@ class _DmChatTile extends StatelessWidget {
                       color: hasUnread
                           ? colorScheme.primary
                           : colorScheme.onSurface.withValues(alpha: 0.48),
-                      fontSize: R.sp(context, 11),
+fontSize: R.sp(context, 18),
+height: 1.1,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -727,8 +746,8 @@ class _DmChatTile extends StatelessWidget {
                   if (hasUnread)
                     Container(
                       constraints: BoxConstraints(
-                        minWidth: R.size(context, 22),
-                        minHeight: R.size(context, 22),
+                        minWidth: R.size(context, 30),
+                        minHeight: R.size(context, 30),
                       ),
                       padding: EdgeInsetsDirectional.symmetric(
                         horizontal: R.size(context, 7),
@@ -744,7 +763,7 @@ class _DmChatTile extends StatelessWidget {
                             : chat.unreadCount.toString(),
                         style: TextStyle(
                           color: colorScheme.onPrimary,
-                          fontSize: R.sp(context, 11),
+                          fontSize: R.sp(context, 15),
                           fontWeight: FontWeight.w800,
                         ),
                       ),

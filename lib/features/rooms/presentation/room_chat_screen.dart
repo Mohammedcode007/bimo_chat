@@ -584,11 +584,11 @@ Future<void> pickImage() async {
   });
 
   try {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-      withData: true,
-    );
+final result = await FilePicker.platform.pickFiles(
+  type: FileType.custom,
+  allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+  withData: true,
+);
 
     if (result == null || result.files.isEmpty) return;
 
@@ -913,24 +913,35 @@ Future<void> seekVoice(Duration position) async {
     return id.isEmpty ? 'me' : id;
   }
 
-  void showAvatarActions(RoomChatUserModel user) {
-    final colorScheme = Theme.of(context).colorScheme;
+void showAvatarActions(RoomChatUserModel user) {
+  final colorScheme = Theme.of(context).colorScheme;
 
-    final canManageUsers = myRole == RoomRole.owner || myRole == RoomRole.admin;
-    final canSetOwner = myRole == RoomRole.owner;
+  final canManageUsers = myRole == RoomRole.owner || myRole == RoomRole.admin;
+  final canSetOwner = myRole == RoomRole.owner;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(R.size(context, 24)),
-        ),
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: colorScheme.surface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(R.size(context, 24)),
       ),
-      builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: R.size(context, 10)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.72,
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              top: R.size(context, 10),
+              bottom: R.size(context, 14) +
+                  MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -943,7 +954,10 @@ Future<void> seekVoice(Duration position) async {
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
+
                 ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
                   leading: Icon(
                     Icons.copy_rounded,
                     color: colorScheme.onSurface,
@@ -952,11 +966,12 @@ Future<void> seekVoice(Duration position) async {
                     'Copy name',
                     style: TextStyle(
                       color: colorScheme.onSurface,
+                      fontSize: R.sp(context, 17),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   onTap: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
 
                     await Clipboard.setData(
                       ClipboardData(text: user.name),
@@ -965,7 +980,10 @@ Future<void> seekVoice(Duration position) async {
                     showMessage('${user.name} copied');
                   },
                 ),
+
                 ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
                   leading: Icon(
                     Icons.card_giftcard_rounded,
                     color: colorScheme.onSurface,
@@ -974,20 +992,25 @@ Future<void> seekVoice(Duration position) async {
                     'Send Gift',
                     style: TextStyle(
                       color: colorScheme.onSurface,
+                      fontSize: R.sp(context, 17),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     handleUserAction(user, RoomUserAction.sendGift);
                   },
                 ),
+
                 if (canManageUsers) ...[
                   Divider(
                     height: 1,
                     color: colorScheme.outlineVariant.withValues(alpha: 0.45),
                   ),
+
                   ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
                     leading: Icon(
                       Icons.person_add_alt_1_rounded,
                       color: colorScheme.onSurface,
@@ -996,15 +1019,19 @@ Future<void> seekVoice(Duration position) async {
                       'Set Member',
                       style: TextStyle(
                         color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 17),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       handleUserAction(user, RoomUserAction.setMember);
                     },
                   ),
+
                   ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
                     leading: Icon(
                       Icons.admin_panel_settings_rounded,
                       color: colorScheme.onSurface,
@@ -1013,16 +1040,20 @@ Future<void> seekVoice(Duration position) async {
                       'Set Admin',
                       style: TextStyle(
                         color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 17),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       handleUserAction(user, RoomUserAction.setAdmin);
                     },
                   ),
+
                   if (canSetOwner)
                     ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
                       leading: Icon(
                         Icons.star_rounded,
                         color: colorScheme.onSurface,
@@ -1031,15 +1062,19 @@ Future<void> seekVoice(Duration position) async {
                         'Set Owner',
                         style: TextStyle(
                           color: colorScheme.onSurface,
+                          fontSize: R.sp(context, 17),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       onTap: () {
-                        Navigator.pop(context);
+                        Navigator.pop(sheetContext);
                         handleUserAction(user, RoomUserAction.setOwner);
                       },
                     ),
+
                   ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
                     leading: Icon(
                       Icons.person_remove_rounded,
                       color: colorScheme.onSurface,
@@ -1048,15 +1083,19 @@ Future<void> seekVoice(Duration position) async {
                       'Remove Role',
                       style: TextStyle(
                         color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 17),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       handleUserAction(user, RoomUserAction.removeRole);
                     },
                   ),
+
                   ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
                     leading: Icon(
                       Icons.logout_rounded,
                       color: colorScheme.onSurface,
@@ -1065,15 +1104,19 @@ Future<void> seekVoice(Duration position) async {
                       'Kick',
                       style: TextStyle(
                         color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 17),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       handleUserAction(user, RoomUserAction.kick);
                     },
                   ),
+
                   ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
                     leading: Icon(
                       Icons.block_rounded,
                       color: colorScheme.error,
@@ -1082,11 +1125,12 @@ Future<void> seekVoice(Duration position) async {
                       'Ban',
                       style: TextStyle(
                         color: colorScheme.error,
+                        fontSize: R.sp(context, 17),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       handleUserAction(user, RoomUserAction.ban);
                     },
                   ),
@@ -1094,11 +1138,11 @@ Future<void> seekVoice(Duration position) async {
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
+        ),
+      );
+    },
+  );
+}
   RoomChatUserModel copyUserWithRole(RoomChatUserModel user, RoomRole role) {
     return RoomChatUserModel(
       id: user.id,

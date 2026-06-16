@@ -37,32 +37,40 @@ class _AuthInputFieldState extends State<AuthInputField> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final borderColor = colorScheme.outline.withValues(alpha: 0.65);
+    final hasError = widget.errorText != null && widget.errorText!.isNotEmpty;
+
+    final borderColor = hasError
+        ? colorScheme.error
+        : colorScheme.outline.withValues(alpha: 0.65);
+
     final textColor = colorScheme.onSurface;
     final hintColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.90);
-    final iconColor = colorScheme.onSurfaceVariant;
+    final iconColor = hasError ? colorScheme.error : colorScheme.onSurfaceVariant;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          height: R.size(context, 72),
+          height: R.size(context, 82),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(R.size(context, 17)),
-            border: Border.all(color: borderColor, width: R.size(context, 1.3)),
+            borderRadius: BorderRadius.circular(R.size(context, 20)),
+            border: Border.all(
+              color: borderColor,
+              width: R.size(context, 1.4),
+            ),
             color: Colors.transparent,
           ),
           child: Row(
             children: [
-              SizedBox(width: R.size(context, 16)),
+              SizedBox(width: R.size(context, 20)),
 
               Icon(
                 widget.prefixIcon,
-                size: R.size(context, 27),
+                size: R.size(context, 31),
                 color: iconColor,
               ),
 
-              SizedBox(width: R.size(context, 14)),
+              SizedBox(width: R.size(context, 17)),
 
               Expanded(
                 child: TextField(
@@ -71,16 +79,19 @@ class _AuthInputFieldState extends State<AuthInputField> {
                   keyboardType: widget.keyboardType,
                   style: TextStyle(
                     color: textColor,
-                    fontSize: R.sp(context, 20),
+                    fontSize: R.sp(context, 22),
                     fontWeight: FontWeight.w500,
+                    height: 1.15,
                   ),
                   cursorColor: colorScheme.primary,
+                  cursorHeight: R.size(context, 26),
                   decoration: InputDecoration(
                     hintText: widget.hintText,
                     hintStyle: TextStyle(
                       color: hintColor,
-                      fontSize: R.sp(context, 20),
+                      fontSize: R.sp(context, 22),
                       fontWeight: FontWeight.w500,
+                      height: 1.15,
                     ),
                     isDense: true,
                     border: InputBorder.none,
@@ -94,35 +105,38 @@ class _AuthInputFieldState extends State<AuthInputField> {
               ),
 
               if (widget.isPassword)
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      obscureText = !obscureText;
-                    });
-                  },
-                  icon: Icon(
-                    obscureText
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: R.size(context, 28),
-                    color: iconColor,
+                Padding(
+                  padding: EdgeInsetsDirectional.only(end: R.size(context, 8)),
+                  child: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        obscureText = !obscureText;
+                      });
+                    },
+                    icon: Icon(
+                      obscureText
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: R.size(context, 31),
+                      color: iconColor,
+                    ),
                   ),
                 )
               else
-                SizedBox(width: R.size(context, 12)),
+                SizedBox(width: R.size(context, 18)),
             ],
           ),
         ),
 
-        if (widget.errorText != null) ...[
-          SizedBox(height: R.size(context, 7)),
+        if (hasError) ...[
+          SizedBox(height: R.size(context, 8)),
           Padding(
-            padding: EdgeInsetsDirectional.only(start: R.size(context, 8)),
+            padding: EdgeInsetsDirectional.only(start: R.size(context, 10)),
             child: Text(
               widget.errorText!,
               style: TextStyle(
                 color: colorScheme.error,
-                fontSize: R.sp(context, 13),
+                fontSize: R.sp(context, 14),
                 fontWeight: FontWeight.w600,
               ),
             ),

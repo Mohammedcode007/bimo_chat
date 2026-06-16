@@ -16,6 +16,7 @@ import '../data/local_message_model.dart';
 import '../logic/dm_provider.dart';
 import '../../users/logic/users_provider.dart';
 import '../../../core/utils/image_picker_helper.dart';
+import '../../users/presentation/public_profile_screen.dart';
 
 class DmChatScreen extends ConsumerStatefulWidget {
   final LocalChatModel chat;
@@ -42,6 +43,13 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
   bool showEmojiPicker = false;
   String? topAudioUrl;
   bool topAudioPlaying = false;
+  Duration topAudioPosition = Duration.zero;
+  Duration topAudioDuration = Duration.zero;
+
+  StreamSubscription<Duration>? topAudioPositionSub;
+  StreamSubscription<Duration>? topAudioDurationSub;
+  StreamSubscription<void>? topAudioCompleteSub;
+  Timer? topAudioProgressTimer;
   LocalMessageModel? replyMessage;
   LocalMessageModel? editingMessage;
 
@@ -82,6 +90,40 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     });
 
     messageController.addListener(_handleTyping);
+    topAudioDurationSub = audioPlayer.onDurationChanged.listen((duration) {
+      if (!mounted) return;
+
+      setState(() {
+        topAudioDuration = duration;
+      });
+    });
+
+    topAudioPositionSub = audioPlayer.onPositionChanged.listen((position) {
+      if (!mounted) return;
+
+      setState(() {
+        topAudioPosition = position;
+      });
+    });
+
+  topAudioCompleteSub = audioPlayer.onPlayerComplete.listen((event) {
+  if (!mounted) return;
+
+  stopTopAudioProgressTimer();
+
+  setState(() {
+    topAudioPlaying = false;
+    topAudioPosition = topAudioDuration;
+  });
+
+  Future.delayed(const Duration(milliseconds: 500), () {
+    if (!mounted) return;
+
+    setState(() {
+      topAudioPosition = Duration.zero;
+    });
+  });
+});
   }
 
   void closeCurrentChatOnce() {
@@ -135,7 +177,12 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     scrollController.dispose();
     inputIdleTimer?.cancel();
     audioRecorder.dispose();
+    topAudioPositionSub?.cancel();
+    topAudioDurationSub?.cancel();
+    topAudioCompleteSub?.cancel();
+    stopTopAudioProgressTimer();
     audioPlayer.dispose();
+
     print('[DM_FLUTTER_SCREEN_DISPOSE_DONE] chatId=${widget.chat.chatId}');
 
     super.dispose();
@@ -222,22 +269,76 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     });
   }
 
-  Future<void> openTopAudioPlayer(String url) async {
-    if (url.trim().isEmpty) return;
+  void startTopAudioProgressTimer() {
+    topAudioProgressTimer?.cancel();
 
-    setState(() {
-      topAudioUrl = url;
-      topAudioPlaying = false;
+    topAudioProgressTimer = Timer.periodic(const Duration(milliseconds: 300), (
+      _,
+    ) async {
+      if (!mounted) return;
+      if (topAudioUrl == null) return;
+
+      final position = await audioPlayer.getCurrentPosition();
+      final duration = await audioPlayer.getDuration();
+
+      if (!mounted) return;
+
+      setState(() {
+        if (position != null) {
+          topAudioPosition = position;
+        }
+
+        if (duration != null && duration > Duration.zero) {
+          topAudioDuration = duration;
+        }
+      });
     });
   }
 
-  Future<void> toggleTopAudio() async {
-    final url = topAudioUrl;
+  void stopTopAudioProgressTimer() {
+    topAudioProgressTimer?.cancel();
+    topAudioProgressTimer = null;
+  }
 
-    if (url == null || url.trim().isEmpty) return;
+Future<void> openTopAudioPlayer(String url) async {
+  if (url.trim().isEmpty) return;
 
+  await audioPlayer.stop();
+  stopTopAudioProgressTimer();
+
+  setState(() {
+    topAudioUrl = url;
+    topAudioPlaying = false;
+    topAudioPosition = Duration.zero;
+    topAudioDuration = Duration.zero;
+  });
+
+  try {
+    await audioPlayer.setSourceUrl(url);
+
+    final duration = await audioPlayer.getDuration();
+
+    if (!mounted) return;
+
+    setState(() {
+      if (duration != null && duration > Duration.zero) {
+        topAudioDuration = duration;
+      }
+    });
+  } catch (error) {
+    print('[DM_TOP_AUDIO_SET_SOURCE_ERROR] $error');
+  }
+}
+Future<void> toggleTopAudio() async {
+  final url = topAudioUrl;
+
+  if (url == null || url.trim().isEmpty) return;
+
+  try {
     if (topAudioPlaying) {
       await audioPlayer.pause();
+
+      stopTopAudioProgressTimer();
 
       setState(() {
         topAudioPlaying = false;
@@ -246,21 +347,41 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
       return;
     }
 
-    await audioPlayer.play(UrlSource(url));
+    if (topAudioPosition > Duration.zero) {
+      await audioPlayer.resume();
+    } else {
+      await audioPlayer.play(UrlSource(url));
+    }
+
+    startTopAudioProgressTimer();
+
+    final duration = await audioPlayer.getDuration();
+
+    if (!mounted) return;
 
     setState(() {
       topAudioPlaying = true;
-    });
-  }
 
-  Future<void> closeTopAudio() async {
-    await audioPlayer.stop();
-
-    setState(() {
-      topAudioUrl = null;
-      topAudioPlaying = false;
+      if (duration != null && duration > Duration.zero) {
+        topAudioDuration = duration;
+      }
     });
+  } catch (error) {
+    print('[DM_TOP_AUDIO_PLAY_ERROR] $error');
+    showMessage('Voice play failed');
   }
+}
+Future<void> closeTopAudio() async {
+  await audioPlayer.stop();
+  stopTopAudioProgressTimer();
+
+  setState(() {
+    topAudioUrl = null;
+    topAudioPlaying = false;
+    topAudioPosition = Duration.zero;
+    topAudioDuration = Duration.zero;
+  });
+}
 
   void _markUnreadIncomingSeen() {
     final state = ref.read(dmProvider);
@@ -785,10 +906,62 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
     );
   }
 
+  Future<void> confirmBlockAction({
+    required String userId,
+    required bool isBlocked,
+  }) async {
+    if (userId.trim().isEmpty) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(isBlocked ? 'Unblock user' : 'Block user'),
+          content: Text(
+            isBlocked
+                ? 'Do you want to unblock this user?'
+                : 'Do you want to block this user?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(isBlocked ? 'Unblock' : 'Block'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    if (isBlocked) {
+      ref.read(usersProvider.notifier).unblockUser(userId);
+      showMessage('User unblocked');
+    } else {
+      ref.read(usersProvider.notifier).blockUser(userId);
+      showMessage('User blocked');
+    }
+  }
+
   void openHeaderMenu(String value) {
+    final usersState = ref.read(usersProvider);
+
+    final isBlocked = usersState.blockedUserIds.contains(
+      widget.chat.peerUserId,
+    );
+
     switch (value) {
       case 'profile':
-        showMessage('Open profile');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PublicProfileScreen(userId: widget.chat.peerUserId),
+          ),
+        );
         break;
 
       case 'clear':
@@ -800,7 +973,10 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
         break;
 
       case 'block':
-        showMessage('Block user');
+        confirmBlockAction(
+          userId: widget.chat.peerUserId,
+          isBlocked: isBlocked,
+        );
         break;
     }
   }
@@ -882,7 +1058,9 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
         ? dmState.typingUserIds.contains(widget.chat.peerUserId)
         : false;
     final peerOnline = isPeerOnline();
-
+    final isBlocked = usersState.blockedUserIds.contains(
+      widget.chat.peerUserId,
+    );
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) {
@@ -902,6 +1080,7 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
               chat: widget.chat,
               isTyping: isPeerTyping,
               isOnline: peerOnline,
+              isBlocked: isBlocked,
               onBack: () {
                 print(
                   '[DM_FLUTTER_HEADER_BACK_PRESSED] chatId=${widget.chat.chatId}',
@@ -916,6 +1095,8 @@ class _DmChatScreenState extends ConsumerState<DmChatScreen> {
             if (topAudioUrl != null)
               _TopAudioPlayer(
                 playing: topAudioPlaying,
+                position: topAudioPosition,
+                duration: topAudioDuration,
                 onPlayPause: toggleTopAudio,
                 onClose: closeTopAudio,
               ),
@@ -1026,6 +1207,7 @@ class _DmChatHeader extends StatelessWidget {
   final LocalChatModel chat;
   final bool isTyping;
   final bool isOnline;
+  final bool isBlocked;
   final VoidCallback onBack;
   final VoidCallback onProfileTap;
   final VoidCallback onCallTap;
@@ -1035,6 +1217,7 @@ class _DmChatHeader extends StatelessWidget {
     required this.chat,
     required this.isTyping,
     required this.isOnline,
+    required this.isBlocked,
     required this.onBack,
     required this.onProfileTap,
     required this.onCallTap,
@@ -1042,6 +1225,7 @@ class _DmChatHeader extends StatelessWidget {
   });
 
   String statusText() {
+    if (isBlocked) return 'Blocked';
     if (isTyping) return 'typing...';
     if (isOnline) return 'Online now';
     return 'Offline';
@@ -1057,10 +1241,10 @@ class _DmChatHeader extends StatelessWidget {
       bottom: false,
       child: Container(
         padding: EdgeInsetsDirectional.fromSTEB(
+          R.size(context, 6),
+          R.size(context, 12),
           R.size(context, 8),
-          R.size(context, 8),
-          R.size(context, 8),
-          R.size(context, 10),
+          R.size(context, 14),
         ),
         decoration: BoxDecoration(
           color: colorScheme.surface,
@@ -1074,15 +1258,15 @@ class _DmChatHeader extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.arrow_back_rounded),
+              icon: Icon(Icons.arrow_back_rounded, size: R.size(context, 30)),
             ),
 
-            Stack(
-              children: [
-                GestureDetector(
-                  onTap: onProfileTap,
-                  child: CircleAvatar(
-                    radius: R.size(context, 22),
+            GestureDetector(
+              onTap: onProfileTap,
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: R.size(context, 32),
                     backgroundColor: colorScheme.primary.withValues(
                       alpha: 0.12,
                     ),
@@ -1097,86 +1281,109 @@ class _DmChatHeader extends StatelessWidget {
                                       .toUpperCase(),
                             style: TextStyle(
                               color: colorScheme.primary,
-                              fontWeight: FontWeight.w800,
+                              fontSize: R.sp(context, 26),
+                              fontWeight: FontWeight.w900,
                             ),
                           )
                         : null,
                   ),
-                ),
 
-                PositionedDirectional(
-                  end: R.size(context, 0),
-                  bottom: R.size(context, 0),
-                  child: Container(
-                    width: R.size(context, 11),
-                    height: R.size(context, 11),
-                    decoration: BoxDecoration(
-                      color: isOnline ? Colors.green : colorScheme.outline,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: colorScheme.surface,
-                        width: R.size(context, 2),
+                  PositionedDirectional(
+                    end: R.size(context, 1),
+                    bottom: R.size(context, 1),
+                    child: Container(
+                      width: R.size(context, 15),
+                      height: R.size(context, 15),
+                      decoration: BoxDecoration(
+                        color: isBlocked
+                            ? Colors.redAccent
+                            : isOnline
+                            ? Colors.green
+                            : colorScheme.outline,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorScheme.surface,
+                          width: R.size(context, 2.5),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
-            SizedBox(width: R.size(context, 12)),
+            SizedBox(width: R.size(context, 14)),
 
             Expanded(
               child: GestureDetector(
                 onTap: onProfileTap,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      chat.peerUsername,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontSize: R.sp(context, 16),
-                        fontWeight: FontWeight.w800,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: EdgeInsetsDirectional.only(top: R.size(context, 2)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        chat.peerUsername,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: R.sp(context, 21),
+                          fontWeight: FontWeight.w900,
+                          height: 1.1,
+                        ),
                       ),
-                    ),
 
-                    SizedBox(height: R.size(context, 2)),
+                      SizedBox(height: R.size(context, 5)),
 
-                    Text(
-                      statusText(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: activeStatus
-                            ? colorScheme.primary
-                            : colorScheme.onSurface.withValues(alpha: 0.55),
-                        fontSize: R.sp(context, 12),
-                        fontWeight: FontWeight.w600,
+                      Text(
+                        statusText(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isBlocked
+                              ? Colors.redAccent
+                              : activeStatus
+                              ? colorScheme.primary
+                              : colorScheme.onSurface.withValues(alpha: 0.58),
+                          fontSize: R.sp(context, 15),
+                          fontWeight: FontWeight.w700,
+                          height: 1.1,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
 
             IconButton(
-              onPressed: onCallTap,
-              icon: const Icon(Icons.call_rounded),
+              onPressed: isBlocked ? null : onCallTap,
+              icon: Icon(Icons.call_rounded, size: R.size(context, 28)),
             ),
 
             PopupMenuButton<String>(
               onSelected: onMenuSelect,
               itemBuilder: (context) {
-                return const [
-                  PopupMenuItem(value: 'profile', child: Text('View profile')),
-                  PopupMenuItem(value: 'clear', child: Text('Clear messages')),
-                  PopupMenuItem(
+                return [
+                  const PopupMenuItem(
+                    value: 'profile',
+                    child: Text('View profile'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'clear',
+                    child: Text('Clear messages'),
+                  ),
+                  const PopupMenuItem(
                     value: 'delete_chat',
                     child: Text('Delete chat'),
                   ),
-                  PopupMenuItem(value: 'block', child: Text('Block user')),
+                  PopupMenuItem(
+                    value: 'block',
+                    child: Text(isBlocked ? 'Unblock user' : 'Block user'),
+                  ),
                 ];
               },
             ),
@@ -1669,9 +1876,9 @@ class _MessageContent extends StatelessWidget {
       message.text,
       style: TextStyle(
         color: textColor,
-        fontSize: R.sp(context, 15),
+        fontSize: R.sp(context, 20),
         height: 1.35,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -1969,65 +2176,140 @@ class _MessageOptionTile extends StatelessWidget {
 
 class _TopAudioPlayer extends StatelessWidget {
   final bool playing;
+  final Duration position;
+  final Duration duration;
   final VoidCallback onPlayPause;
   final VoidCallback onClose;
 
   const _TopAudioPlayer({
     required this.playing,
+    required this.position,
+    required this.duration,
     required this.onPlayPause,
     required this.onClose,
   });
+
+  String formatDuration(Duration value) {
+    final minutes = value.inMinutes.remainder(60).toString();
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    return '$minutes:$seconds';
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
+    final totalMs = duration.inMilliseconds;
+    final currentMs = position.inMilliseconds;
+
+    final progress = totalMs <= 0 ? 0.0 : (currentMs / totalMs).clamp(0.0, 1.0);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       margin: EdgeInsetsDirectional.fromSTEB(
-        R.size(context, 14),
+        R.size(context, 12),
         R.size(context, 6),
-        R.size(context, 14),
+        R.size(context, 12),
         R.size(context, 6),
       ),
-      padding: EdgeInsetsDirectional.symmetric(
-        horizontal: R.size(context, 12),
-        vertical: R.size(context, 8),
+      padding: EdgeInsetsDirectional.fromSTEB(
+        R.size(context, 10),
+        R.size(context, 8),
+        R.size(context, 8),
+        R.size(context, 8),
       ),
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(R.size(context, 16)),
+        borderRadius: BorderRadius.circular(R.size(context, 18)),
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.10)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: R.size(context, 18),
+            offset: Offset(0, R.size(context, 5)),
           ),
         ],
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: onPlayPause,
-            icon: Icon(
-              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              color: colorScheme.primary,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              playing ? 'Playing voice message' : 'Voice message',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w700,
+          Row(
+            children: [
+              InkWell(
+                onTap: onPlayPause,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: R.size(context, 38),
+                  height: R.size(context, 38),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: colorScheme.primary,
+                    size: R.size(context, 27),
+                  ),
+                ),
               ),
-            ),
+
+              SizedBox(width: R.size(context, 10)),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      playing ? 'Playing voice message' : 'Voice message',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: R.sp(context, 13),
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
+                    ),
+
+                    SizedBox(height: R.size(context, 5)),
+
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: R.size(context, 4),
+                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(width: R.size(context, 10)),
+
+           Text(
+  duration == Duration.zero
+      ? '${formatDuration(position)} / --:--'
+      : '${formatDuration(position)} / ${formatDuration(duration)}',
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: R.sp(context, 11),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              SizedBox(width: R.size(context, 2)),
+
+              IconButton(
+                onPressed: onClose,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.close_rounded, size: R.size(context, 21)),
+              ),
+            ],
           ),
-          IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded)),
         ],
       ),
     );
