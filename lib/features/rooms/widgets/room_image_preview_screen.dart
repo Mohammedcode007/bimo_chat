@@ -14,7 +14,6 @@ class RoomImagePreviewScreen extends StatelessWidget {
 
   bool get isNetworkImage {
     final value = imagePath.trim().toLowerCase();
-
     return value.startsWith('http://') || value.startsWith('https://');
   }
 
@@ -27,29 +26,22 @@ class RoomImagePreviewScreen extends StatelessWidget {
     );
   }
 
-  Widget buildImage({
-    required double width,
-    required double height,
-  }) {
+  Widget imageWidget() {
     if (imagePath.trim().isEmpty) {
-      return const Center(
-        child: Icon(
-          Icons.broken_image_rounded,
-          color: Colors.white,
-          size: 54,
-        ),
+      return const Icon(
+        Icons.broken_image_rounded,
+        color: Colors.white,
+        size: 54,
       );
     }
 
     if (isNetworkImage) {
       return Image.network(
-        imagePath,
-        width: width,
-        height: height,
+        imagePath.trim(),
         fit: BoxFit.contain,
         alignment: Alignment.center,
         gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
+        filterQuality: FilterQuality.high,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
 
@@ -61,12 +53,10 @@ class RoomImagePreviewScreen extends StatelessWidget {
           );
         },
         errorBuilder: (context, error, stackTrace) {
-          return const Center(
-            child: Icon(
-              Icons.broken_image_rounded,
-              color: Colors.white,
-              size: 54,
-            ),
+          return const Icon(
+            Icons.broken_image_rounded,
+            color: Colors.white,
+            size: 54,
           );
         },
       );
@@ -74,19 +64,15 @@ class RoomImagePreviewScreen extends StatelessWidget {
 
     return Image.file(
       File(imagePath),
-      width: width,
-      height: height,
       fit: BoxFit.contain,
       alignment: Alignment.center,
       gaplessPlayback: true,
-      filterQuality: FilterQuality.medium,
+      filterQuality: FilterQuality.high,
       errorBuilder: (context, error, stackTrace) {
-        return const Center(
-          child: Icon(
-            Icons.broken_image_rounded,
-            color: Colors.white,
-            size: 54,
-          ),
+        return const Icon(
+          Icons.broken_image_rounded,
+          color: Colors.white,
+          size: 54,
         );
       },
     );
@@ -109,12 +95,23 @@ class RoomImagePreviewScreen extends StatelessWidget {
                   maxScale: 5,
                   panEnabled: true,
                   scaleEnabled: true,
+                  clipBehavior: Clip.none,
+                  boundaryMargin: EdgeInsets.all(R.size(context, 100)),
                   child: SizedBox(
                     width: screenWidth,
                     height: screenHeight,
-                    child: buildImage(
-                      width: screenWidth,
-                      height: screenHeight,
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: screenWidth,
+                          height: screenHeight,
+                          child: Center(
+                            child: imageWidget(),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -132,6 +129,7 @@ class RoomImagePreviewScreen extends StatelessWidget {
                     icon: const Icon(
                       Icons.close_rounded,
                       color: Colors.white,
+                      size: 34,
                     ),
                   ),
 
@@ -142,6 +140,7 @@ class RoomImagePreviewScreen extends StatelessWidget {
                     icon: const Icon(
                       Icons.download_rounded,
                       color: Colors.white,
+                      size: 34,
                     ),
                   ),
                 ],

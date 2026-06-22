@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/utils/responsive.dart';
 
 class FriendsHeader extends StatelessWidget {
@@ -24,6 +26,7 @@ class FriendsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final lang = AppLocalizations.of(context);
 
     return SafeArea(
       bottom: false,
@@ -36,32 +39,35 @@ class FriendsHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-   InkWell(
-  onTap: onAvatarTap,
-  borderRadius: BorderRadius.circular(999),
-  child: CircleAvatar(
-    radius: R.size(context, 32),
-    backgroundColor: const Color(0xFFDDE7FF),
-    backgroundImage: photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl),
-    child: photoUrl.trim().isEmpty
-        ? Text(
-            username.trim().isEmpty
-                ? '?'
-                : username.characters.first.toUpperCase(),
-            style: TextStyle(
-              color: colorScheme.primary,
-              fontSize: R.sp(context, 24),
-              fontWeight: FontWeight.w900,
+            InkWell(
+              onTap: onAvatarTap,
+              borderRadius: BorderRadius.circular(999),
+              child: CircleAvatar(
+                radius: R.size(context, 32),
+                backgroundColor: const Color(0xFFDDE7FF),
+                backgroundImage: photoUrl.trim().isEmpty
+                    ? null
+                    : NetworkImage(photoUrl),
+                child: photoUrl.trim().isEmpty
+                    ? Text(
+                        username.trim().isEmpty
+                            ? '?'
+                            : username.characters.first.toUpperCase(),
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontSize: R.sp(context, 24),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                    : null,
+              ),
             ),
-          )
-        : null,
-  ),
-),
+
             SizedBox(width: R.size(context, 18)),
 
             Expanded(
               child: Text(
-                'Friends',
+                lang.t('friends'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -73,7 +79,10 @@ class FriendsHeader extends StatelessWidget {
               ),
             ),
 
-            _HeaderIcon(icon: Icons.person_add_alt_1_rounded, onTap: onAddTap),
+            _HeaderIcon(
+              icon: Icons.person_add_alt_1_rounded,
+              onTap: onAddTap,
+            ),
 
             _HeaderIcon(
               icon: Icons.notifications_rounded,
@@ -90,9 +99,14 @@ class FriendsHeader extends StatelessWidget {
               },
               color: const Color(0xFFF4EDF8),
               elevation: 6,
-              offset: Offset(0, R.size(context, 46)),
+              offset: Offset(
+                0,
+                R.size(context, 46),
+              ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(R.size(context, 8)),
+                borderRadius: BorderRadius.circular(
+                  R.size(context, 8),
+                ),
               ),
               itemBuilder: (context) {
                 return [
@@ -100,26 +114,34 @@ class FriendsHeader extends StatelessWidget {
                     value: 'settings',
                     height: R.size(context, 54),
                     child: Text(
-                      'Settings',
-                      style: TextStyle(fontSize: R.sp(context, 22)),
+                      lang.t('settings'),
+                      style: TextStyle(
+                        fontSize: R.sp(context, 22),
+                      ),
                     ),
                   ),
                   PopupMenuItem(
                     value: 'logout',
                     height: R.size(context, 54),
                     child: Text(
-                      'Logout',
-                      style: TextStyle(fontSize: R.sp(context, 22)),
+                      lang.t('logout'),
+                      style: TextStyle(
+                        fontSize: R.sp(context, 22),
+                      ),
                     ),
                   ),
                 ];
               },
               child: Padding(
-                padding: EdgeInsets.all(R.size(context, 8)),
+                padding: EdgeInsets.all(
+                  R.size(context, 8),
+                ),
                 child: Icon(
                   Icons.more_vert_rounded,
                   size: R.size(context, 32),
-                  color: colorScheme.onSurface.withValues(alpha: 0.75),
+                  color: colorScheme.onSurface.withValues(
+                    alpha: 0.75,
+                  ),
                 ),
               ),
             ),
@@ -134,7 +156,10 @@ class _HeaderIcon extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _HeaderIcon({required this.icon, required this.onTap});
+  const _HeaderIcon({
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -144,11 +169,15 @@ class _HeaderIcon extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Padding(
-        padding: EdgeInsets.all(R.size(context, 8)),
+        padding: EdgeInsets.all(
+          R.size(context, 8),
+        ),
         child: Icon(
           icon,
           size: R.size(context, 31),
-          color: colorScheme.onSurface.withValues(alpha: 0.75),
+          color: colorScheme.onSurface.withValues(
+            alpha: 0.75,
+          ),
         ),
       ),
     );

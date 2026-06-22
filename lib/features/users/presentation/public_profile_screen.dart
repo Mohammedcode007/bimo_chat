@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_html/flutter_html.dart';
 
 import '../../../core/utils/responsive.dart';
 import '../logic/users_provider.dart';
-import 'package:flutter_html/flutter_html.dart';
 import '../../auth/logic/auth_provider.dart';
 import '../../dm/data/local_chat_model.dart';
 import '../../dm/presentation/dm_chat_screen.dart';
+
 class PublicProfileScreen extends ConsumerStatefulWidget {
   final String userId;
 
@@ -66,51 +70,81 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
 
   void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
-void openChat({
-  required String myUserId,
-  required String peerUserId,
-  required String peerUsername,
-  required String peerPhotoUrl,
-}) {
-  if (myUserId.trim().isEmpty) {
-    showMessage('Please login first');
-    return;
+
+  Future<void> copyText(String value, String label) async {
+    final text = value.trim();
+
+    if (text.isEmpty || text == '-') return;
+
+    await Clipboard.setData(ClipboardData(text: text));
+
+    if (!mounted) return;
+
+    showMessage('$label copied');
   }
 
-  if (peerUserId.trim().isEmpty || peerUserId == '-') return;
+  void openFullImage(String imageUrl) {
+    final url = imageUrl.trim();
 
-  if (myUserId == peerUserId) {
-    showMessage('You cannot chat with yourself');
-    return;
-  }
+    if (url.isEmpty) return;
 
-  final ids = [myUserId, peerUserId]..sort();
-  final chatId = '${ids[0]}_${ids[1]}';
-
-  final chat = LocalChatModel(
-    chatId: chatId,
-    peerUserId: peerUserId,
-    peerUsername: peerUsername,
-    peerPhotoUrl: peerPhotoUrl,
-    lastMessageText: '',
-    lastMessageType: 'text',
-    lastMessageAt: DateTime.now(),
-    unreadCount: 0,
-  );
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => DmChatScreen(
-        myUserId: myUserId,
-        chat: chat,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FullProfileImageScreen(imageUrl: url),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  void openChat({
+    required String myUserId,
+    required String peerUserId,
+    required String peerUsername,
+    required String peerPhotoUrl,
+  }) {
+    if (myUserId.trim().isEmpty) {
+      showMessage('Please login first');
+      return;
+    }
+
+    if (peerUserId.trim().isEmpty || peerUserId == '-') return;
+
+    if (myUserId == peerUserId) {
+      showMessage('You cannot chat with yourself');
+      return;
+    }
+
+    final ids = [myUserId, peerUserId]..sort();
+    final chatId = '${ids[0]}_${ids[1]}';
+
+    final chat = LocalChatModel(
+      chatId: chatId,
+      peerUserId: peerUserId,
+      peerUsername: peerUsername,
+      peerPhotoUrl: peerPhotoUrl,
+      lastMessageText: '',
+      lastMessageType: 'text',
+      lastMessageAt: DateTime.now(),
+      unreadCount: 0,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DmChatScreen(
+          myUserId: myUserId,
+          chat: chat,
+        ),
+      ),
+    );
+  }
+
   Future<void> confirmBlockAction({
     required String userId,
     required bool isBlocked,
@@ -152,11 +186,11 @@ void openChat({
 
   @override
   Widget build(BuildContext context) {
-  final state = ref.watch(usersProvider);
-final authState = ref.watch(authProvider);
-final profile = state.profile;
+    final state = ref.watch(usersProvider);
+    final authState = ref.watch(authProvider);
+    final profile = state.profile;
 
-final myUserId = authState.userId ?? '';
+    final myUserId = authState.userId ?? '';
 
     ref.listen(usersProvider, (previous, next) {
       if (next.error != null && next.error!.isNotEmpty) {
@@ -189,6 +223,7 @@ final myUserId = authState.userId ?? '';
     final coverUrl = profile['coverUrl']?.toString() ?? '';
     final accountColor = profile['accountColor']?.toString() ?? '#2BCB00';
     final statusMessage = profile['statusMessage']?.toString().trim() ?? '';
+
     final badges = profile['badges'] is List
         ? List<Map<String, dynamic>>.from(
             (profile['badges'] as List).map(
@@ -210,6 +245,7 @@ final myUserId = authState.userId ?? '';
 
     final verificationType = profile['verificationType']?.toString() ?? 'none';
     final verified = verificationType != 'none';
+
     final receivedGifts = textValue(stats['giftsReceivedCount']);
     final sentGifts = textValue(stats['giftsSentCount']);
     final views = textValue(stats['profileViewsCount']);
@@ -258,14 +294,21 @@ final myUserId = authState.userId ?? '';
               color: nameColor,
               badges: badgeValues,
               verified: verified,
+              onTap: () => copyText(username, 'Name'),
             ),
+
             _CoverAvatarSection(
               coverUrl: coverUrl,
               avatarUrl: photoUrl,
               avatarText: avatarText,
+              onCoverTap: () => openFullImage(coverUrl),
+              onAvatarTap: () => openFullImage(photoUrl),
             ),
 
-            _UserIdText(userId: userId),
+            _UserIdText(
+              userId: userId,
+              onTap: () => copyText(userId, 'ID'),
+            ),
 
             if (!isSelf) ...[
               SizedBox(height: R.size(context, 14)),
@@ -282,19 +325,19 @@ final myUserId = authState.userId ?? '';
                 onBlockTap: () {
                   confirmBlockAction(userId: userId, isBlocked: isBlocked);
                 },
-          onChatTap: () {
-  if (isBlocked) {
-    showMessage('You cannot chat with a blocked user');
-    return;
-  }
+                onChatTap: () {
+                  if (isBlocked) {
+                    showMessage('You cannot chat with a blocked user');
+                    return;
+                  }
 
-  openChat(
-    myUserId: myUserId,
-    peerUserId: userId,
-    peerUsername: username,
-    peerPhotoUrl: photoUrl,
-  );
-},
+                  openChat(
+                    myUserId: myUserId,
+                    peerUserId: userId,
+                    peerUsername: username,
+                    peerPhotoUrl: photoUrl,
+                  );
+                },
               ),
             ],
 
@@ -332,55 +375,60 @@ class _ProfileTopName extends StatelessWidget {
   final Color color;
   final List<String> badges;
   final bool verified;
+  final VoidCallback onTap;
 
   const _ProfileTopName({
     required this.name,
     required this.color,
     required this.badges,
     required this.verified,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      height: R.size(context, 122),
-      alignment: Alignment.center,
-      padding: EdgeInsets.symmetric(horizontal: R.size(context, 18)),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: R.size(context, 5),
-        runSpacing: R.size(context, 4),
-        children: [
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            textDirection: TextDirection.rtl,
-            style: TextStyle(
-              color: color,
-              fontSize: R.sp(context, 24),
-              fontWeight: FontWeight.w600,
-              height: 1.1,
-            ),
-          ),
-
-          for (final badge in badges)
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: R.size(context, 122),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: R.size(context, 18)),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: R.size(context, 5),
+          runSpacing: R.size(context, 4),
+          children: [
             Text(
-              badge,
-              style: TextStyle(fontSize: R.sp(context, 21), height: 1),
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: TextStyle(
+                color: color,
+                fontSize: R.sp(context, 24),
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+              ),
             ),
 
-          if (verified)
-            Icon(
-              Icons.verified_rounded,
-              color: colorScheme.primary,
-              size: R.size(context, 21),
-            ),
-        ],
+            for (final badge in badges)
+              Text(
+                badge,
+                style: TextStyle(fontSize: R.sp(context, 21), height: 1),
+              ),
+
+            if (verified)
+              Icon(
+                Icons.verified_rounded,
+                color: colorScheme.primary,
+                size: R.size(context, 21),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -390,11 +438,15 @@ class _CoverAvatarSection extends StatelessWidget {
   final String coverUrl;
   final String avatarUrl;
   final String avatarText;
+  final VoidCallback onCoverTap;
+  final VoidCallback onAvatarTap;
 
   const _CoverAvatarSection({
     required this.coverUrl,
     required this.avatarUrl,
     required this.avatarText,
+    required this.onCoverTap,
+    required this.onAvatarTap,
   });
 
   @override
@@ -407,12 +459,18 @@ class _CoverAvatarSection extends StatelessWidget {
           Positioned.fill(
             top: 0,
             bottom: R.size(context, 44),
-            child: _CoverImage(coverUrl: coverUrl),
+            child: GestureDetector(
+              onTap: coverUrl.trim().isEmpty ? null : onCoverTap,
+              child: _CoverImage(coverUrl: coverUrl),
+            ),
           ),
 
           Positioned(
             bottom: 0,
-            child: _Avatar(avatarUrl: avatarUrl, avatarText: avatarText),
+            child: GestureDetector(
+              onTap: avatarUrl.trim().isEmpty ? null : onAvatarTap,
+              child: _Avatar(avatarUrl: avatarUrl, avatarText: avatarText),
+            ),
           ),
         ],
       ),
@@ -505,8 +563,12 @@ class _AvatarText extends StatelessWidget {
 
 class _UserIdText extends StatelessWidget {
   final String userId;
+  final VoidCallback onTap;
 
-  const _UserIdText({required this.userId});
+  const _UserIdText({
+    required this.userId,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -515,12 +577,22 @@ class _UserIdText extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: R.size(context, 10)),
       child: Center(
-        child: Text(
-          'ID: $userId',
-          style: TextStyle(
-            color: colorScheme.onSurfaceVariant,
-            fontSize: R.sp(context, 22),
-            fontWeight: FontWeight.w700,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: R.size(context, 12),
+              vertical: R.size(context, 4),
+            ),
+            child: Text(
+              'ID: $userId',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: R.sp(context, 22),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
       ),
@@ -934,6 +1006,60 @@ class _BioBox extends StatelessWidget {
                 height: 1.55,
               ),
             ),
+    );
+  }
+}
+
+class FullProfileImageScreen extends StatelessWidget {
+  final String imageUrl;
+
+  const FullProfileImageScreen({
+    super.key,
+    required this.imageUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4,
+                child: Center(
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) {
+                      return const Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white,
+                        size: 64,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+
+            PositionedDirectional(
+              top: MediaQuery.of(context).padding.top + R.size(context, 8),
+              start: R.size(context, 8),
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

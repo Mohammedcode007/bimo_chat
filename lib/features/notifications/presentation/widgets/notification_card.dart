@@ -337,45 +337,59 @@ class _TypeIcon extends StatelessWidget {
     );
   }
 
-  _NotificationIconData _iconData(AppNotificationType type) {
-    switch (type) {
-      case AppNotificationType.message:
-        return const _NotificationIconData(
-          icon: Icons.chat_bubble_rounded,
-          color: Color(0xFF1D9BF0),
-        );
+_NotificationIconData _iconData(
+  AppNotificationType type,
+) {
+  switch (type) {
+    case AppNotificationType.message:
+      return const _NotificationIconData(
+        icon: Icons.chat_bubble_rounded,
+        color: Color(0xFF1D9BF0),
+      );
 
-      case AppNotificationType.friendRequest:
-        return const _NotificationIconData(
-          icon: Icons.person_add_rounded,
-          color: Color(0xFF087887),
-        );
+    case AppNotificationType.friendRequest:
+      return const _NotificationIconData(
+        icon: Icons.person_add_rounded,
+        color: Color(0xFF087887),
+      );
 
-      case AppNotificationType.tweetLike:
-        return const _NotificationIconData(
-          icon: Icons.favorite_rounded,
-          color: Color(0xFFF91880),
-        );
+    case AppNotificationType.tweetLike:
+      return const _NotificationIconData(
+        icon: Icons.favorite_rounded,
+        color: Color(0xFFF91880),
+      );
 
-      case AppNotificationType.tweetComment:
-        return const _NotificationIconData(
-          icon: Icons.mode_comment_rounded,
-          color: Color(0xFF1D9BF0),
-        );
+    case AppNotificationType.tweetComment:
+      return const _NotificationIconData(
+        icon: Icons.mode_comment_rounded,
+        color: Color(0xFF1D9BF0),
+      );
 
-      case AppNotificationType.tweetRepost:
-        return const _NotificationIconData(
-          icon: Icons.repeat_rounded,
-          color: Color(0xFF00BA7C),
-        );
+    case AppNotificationType.tweetRepost:
+      return const _NotificationIconData(
+        icon: Icons.repeat_rounded,
+        color: Color(0xFF00BA7C),
+      );
 
-      case AppNotificationType.mention:
-        return const _NotificationIconData(
-          icon: Icons.alternate_email_rounded,
-          color: Color(0xFF8B5CF6),
-        );
-    }
+    case AppNotificationType.tweetMention:
+      return const _NotificationIconData(
+        icon: Icons.alternate_email_rounded,
+        color: Color(0xFF8B5CF6),
+      );
+
+    case AppNotificationType.commentMention:
+      return const _NotificationIconData(
+        icon: Icons.alternate_email_rounded,
+        color: Color(0xFFFF8A00),
+      );
+
+    case AppNotificationType.mention:
+      return const _NotificationIconData(
+        icon: Icons.alternate_email_rounded,
+        color: Color(0xFF8B5CF6),
+      );
   }
+}
 }
 
 class _NotificationIconData {

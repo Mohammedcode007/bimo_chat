@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/responsive.dart';
 import '../../chats/data/chat_item_model.dart';
 import '../../chats/presentation/chat_screen.dart';
@@ -67,14 +68,20 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ChatScreen(chat: chat)),
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(chat: chat),
+      ),
     );
   }
 
   void sendRequest(String name) {
+    final lang = AppLocalizations.of(context);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Friend request sent to $name'),
+        content: Text(
+          '${lang.t('friend_request_sent_to')} $name',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -83,6 +90,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final lang = AppLocalizations.of(context);
     final items = filteredUsers;
 
     return Scaffold(
@@ -109,7 +117,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      'Add Friend',
+                      lang.t('add_friend'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -125,13 +133,17 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
 
             Container(
               height: R.size(context, 50),
-              margin: EdgeInsets.symmetric(horizontal: R.size(context, 18)),
+              margin: EdgeInsets.symmetric(
+                horizontal: R.size(context, 18),
+              ),
               padding: EdgeInsetsDirectional.symmetric(
                 horizontal: R.size(context, 14),
               ),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(R.size(context, 28)),
+                borderRadius: BorderRadius.circular(
+                  R.size(context, 28),
+                ),
               ),
               child: Row(
                 children: [
@@ -153,7 +165,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Search username',
+                        hintText: lang.t('search_username'),
                         hintStyle: TextStyle(
                           color: colorScheme.onSurfaceVariant,
                           fontSize: R.sp(context, 16),
@@ -176,6 +188,9 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                 context: context,
                 colorScheme: colorScheme,
                 items: items,
+                searchByUsernameText: lang.t('search_by_username'),
+                noUsersFoundText: lang.t('no_users_found'),
+                addText: lang.t('add'),
               ),
             ),
           ],
@@ -188,13 +203,22 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
     required BuildContext context,
     required ColorScheme colorScheme,
     required List<String> items,
+    required String searchByUsernameText,
+    required String noUsersFoundText,
+    required String addText,
   }) {
     if (query.trim().isEmpty) {
-      return _EmptyText(text: 'Search by username', colorScheme: colorScheme);
+      return _EmptyText(
+        text: searchByUsernameText,
+        colorScheme: colorScheme,
+      );
     }
 
     if (items.isEmpty) {
-      return _EmptyText(text: 'No users found', colorScheme: colorScheme);
+      return _EmptyText(
+        text: noUsersFoundText,
+        colorScheme: colorScheme,
+      );
     }
 
     return ListView.builder(
@@ -205,6 +229,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
 
         return _UserResultTile(
           name: name,
+          addText: addText,
           onTap: () => openChatWithUser(name),
           onAdd: () => sendRequest(name),
         );
@@ -217,7 +242,10 @@ class _EmptyText extends StatelessWidget {
   final String text;
   final ColorScheme colorScheme;
 
-  const _EmptyText({required this.text, required this.colorScheme});
+  const _EmptyText({
+    required this.text,
+    required this.colorScheme,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -236,11 +264,13 @@ class _EmptyText extends StatelessWidget {
 
 class _UserResultTile extends StatelessWidget {
   final String name;
+  final String addText;
   final VoidCallback onTap;
   final VoidCallback onAdd;
 
   const _UserResultTile({
     required this.name,
+    required this.addText,
     required this.onTap,
     required this.onAdd,
   });
@@ -263,7 +293,9 @@ class _UserResultTile extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: R.size(context, 28),
-              backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
+              backgroundColor: colorScheme.primary.withValues(
+                alpha: 0.12,
+              ),
               child: Text(
                 name[0].toUpperCase(),
                 style: TextStyle(
@@ -278,11 +310,15 @@ class _UserResultTile extends StatelessWidget {
 
             Expanded(
               child: Container(
-                constraints: BoxConstraints(minHeight: R.size(context, 72)),
+                constraints: BoxConstraints(
+                  minHeight: R.size(context, 72),
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.75),
+                      color: colorScheme.outlineVariant.withValues(
+                        alpha: 0.75,
+                      ),
                       width: 1,
                     ),
                   ),
@@ -322,7 +358,7 @@ class _UserResultTile extends StatelessWidget {
                     TextButton(
                       onPressed: onAdd,
                       child: Text(
-                        'Add',
+                        addText,
                         style: TextStyle(
                           fontSize: R.sp(context, 14),
                           fontWeight: FontWeight.w800,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/responsive.dart';
-import '../../data/tweet_model.dart';
+import '../../data/tweet_models.dart';
 
 class TweetReplySheet extends StatefulWidget {
   final TweetModel tweet;
@@ -14,42 +14,72 @@ class TweetReplySheet extends StatefulWidget {
   });
 
   @override
-  State<TweetReplySheet> createState() => _TweetReplySheetState();
+  State<TweetReplySheet> createState() =>
+      _TweetReplySheetState();
 }
 
-class _TweetReplySheetState extends State<TweetReplySheet> {
-  final controller = TextEditingController();
+class _TweetReplySheetState
+    extends State<TweetReplySheet> {
+  final TextEditingController controller =
+      TextEditingController();
 
-  bool get canReply => controller.text.trim().isNotEmpty;
+  bool get canReply =>
+      controller.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    controller.addListener(() {
-      setState(() {});
-    });
+
+    controller.addListener(
+      _onTextChanged,
+    );
+  }
+
+  void _onTextChanged() {
+    if (!mounted) return;
+
+    setState(() {});
   }
 
   @override
   void dispose() {
+    controller.removeListener(
+      _onTextChanged,
+    );
+
     controller.dispose();
+
     super.dispose();
   }
 
   void sendReply() {
-    final text = controller.text.trim();
+    final text =
+        controller.text.trim();
 
     if (text.isEmpty) return;
 
     widget.onReply(text);
-    Navigator.pop(context);
+
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme =
+        Theme.of(context).colorScheme;
+
+    final username =
+        widget.tweet.author?.username.trim() ??
+        '';
+
+    final replyingTo = username.isEmpty
+        ? 'Replying to this tweet'
+        : 'Replying to @$username';
+
     return SafeArea(
       child: Padding(
-        padding: EdgeInsetsDirectional.fromSTEB(
+        padding:
+            EdgeInsetsDirectional.fromSTEB(
           R.size(context, 16),
           R.size(context, 14),
           R.size(context, 16),
@@ -61,64 +91,113 @@ class _TweetReplySheetState extends State<TweetReplySheet> {
             Container(
               width: R.size(context, 46),
               height: R.size(context, 5),
-              margin: EdgeInsets.only(bottom: R.size(context, 12)),
+              margin: EdgeInsets.only(
+                bottom: R.size(context, 12),
+              ),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(999),
+                color: colorScheme.onSurface
+                    .withValues(
+                  alpha: 0.25,
+                ),
+                borderRadius:
+                    BorderRadius.circular(999),
               ),
             ),
 
             Row(
               children: [
                 IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(
+                    Icons.close_rounded,
+                  ),
                 ),
+
                 const Spacer(),
+
                 ElevatedButton(
-                  onPressed: canReply ? sendReply : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.black.withValues(
+                  onPressed:
+                      canReply ? sendReply : null,
+                  style:
+                      ElevatedButton.styleFrom(
+                    backgroundColor:
+                        colorScheme.onSurface,
+                    foregroundColor:
+                        colorScheme.surface,
+                    disabledBackgroundColor:
+                        colorScheme.onSurface
+                            .withValues(
                       alpha: 0.25,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
+                    disabledForegroundColor:
+                        colorScheme.surface
+                            .withValues(
+                      alpha: 0.75,
+                    ),
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(
+                        999,
+                      ),
                     ),
                   ),
-                  child: const Text('Reply'),
+                  child: const Text(
+                    'Reply',
+                  ),
                 ),
               ],
             ),
 
-            SizedBox(height: R.size(context, 8)),
+            SizedBox(
+              height: R.size(context, 8),
+            ),
 
             Align(
-              alignment: AlignmentDirectional.centerStart,
+              alignment:
+                  AlignmentDirectional.centerStart,
               child: Text(
-                'Replying to @${widget.tweet.username}',
+                replyingTo,
                 style: TextStyle(
-                  color: const Color(0xFF1D9BF0),
-                  fontSize: R.sp(context, 14),
-                  fontWeight: FontWeight.w500,
+                  color:
+                      const Color(0xFF1D9BF0),
+                  fontSize:
+                      R.sp(context, 14),
+                  fontWeight:
+                      FontWeight.w500,
                 ),
               ),
             ),
 
-            SizedBox(height: R.size(context, 10)),
+            SizedBox(
+              height: R.size(context, 10),
+            ),
 
             TextField(
               controller: controller,
               autofocus: true,
               minLines: 3,
               maxLines: 7,
-              style: TextStyle(fontSize: R.sp(context, 18), height: 1.35),
-              decoration: const InputDecoration(
-                hintText: 'Post your reply',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
+              maxLength: 500,
+              textInputAction:
+                  TextInputAction.newline,
+              style: TextStyle(
+                fontSize:
+                    R.sp(context, 18),
+                height: 1.35,
+              ),
+              decoration:
+                  const InputDecoration(
+                hintText:
+                    'Post your reply',
+                border:
+                    InputBorder.none,
+                enabledBorder:
+                    InputBorder.none,
+                focusedBorder:
+                    InputBorder.none,
               ),
             ),
           ],

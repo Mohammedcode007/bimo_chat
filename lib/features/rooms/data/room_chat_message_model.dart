@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import 'room_chat_user_model.dart';
 import 'room_role.dart';
 
-enum RoomChatMessageType { text, image, voice, system }
-
+enum RoomChatMessageType {
+  text,
+  image,
+  video,
+  voice,
+  system,
+}
 class RoomChatMessageModel {
   final String id;
   final RoomChatUserModel sender;

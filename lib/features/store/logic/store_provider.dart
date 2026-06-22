@@ -5,28 +5,28 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/ws_events.dart';
 import '../../../core/constants/ws_handlers.dart';
-import '../../../core/network/ws_client.dart';
-import '../../../core/network/ws_provider.dart';
+import '../../../core/network/ws_background_controller.dart';
+import '../../../core/network/ws_event_bus.dart';
 import '../../auth/logic/auth_provider.dart';
 import 'store_state.dart';
 
 final storeProvider = StateNotifierProvider<StoreController, StoreState>((ref) {
-  final ws = ref.watch(wsClientProvider);
-  return StoreController(ref, ws);
+  return StoreController(ref);
 });
 
 class StoreController extends StateNotifier<StoreState> {
   final Ref ref;
-  final WsClient ws;
 
   StreamSubscription? _sub;
 
-  StoreController(this.ref, this.ws) : super(const StoreState()) {
+  StoreController(this.ref) : super(const StoreState()) {
     _listen();
   }
 
   void _listen() {
-    _sub = ws.stream.listen((data) {
+    _sub?.cancel();
+
+    _sub = WsEventBus.instance.stream.listen((data) {
       final handler = data['handler']?.toString();
       final type = data['type']?.toString();
 
@@ -56,7 +56,8 @@ class StoreController extends StateNotifier<StoreState> {
     final items = _readList(data['items']);
     final inventory = _readList(data['inventory']);
 
-    final points = int.tryParse(data['points']?.toString() ?? '') ??
+    final points =
+        int.tryParse(data['points']?.toString() ?? '') ??
         _readPointsFromUser(data) ??
         state.points;
 
@@ -86,7 +87,8 @@ class StoreController extends StateNotifier<StoreState> {
         ? Map<String, dynamic>.from(data['user'])
         : <String, dynamic>{};
 
-    final points = int.tryParse(user['points']?.toString() ?? '') ??
+    final points =
+        int.tryParse(user['points']?.toString() ?? '') ??
         int.tryParse(data['points']?.toString() ?? '') ??
         state.points;
 
@@ -142,7 +144,7 @@ class StoreController extends StateNotifier<StoreState> {
       error: null,
     );
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.storeItemsList,
       'request_id': const Uuid().v4(),
     });
@@ -153,17 +155,19 @@ class StoreController extends StateNotifier<StoreState> {
     يعني بعد buyItem لا تحتاج activateItem غالبًا
   */
   void buyItem(String itemId) {
-    if (itemId.trim().isEmpty) return;
+    final cleanItemId = itemId.trim();
+
+    if (cleanItemId.isEmpty) return;
 
     state = state.copyWith(
       loading: true,
       error: null,
     );
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.storeItemBuy,
       'request_id': const Uuid().v4(),
-      'item_id': itemId.trim(),
+      'item_id': cleanItemId,
     });
   }
 
@@ -172,17 +176,19 @@ class StoreController extends StateNotifier<StoreState> {
     الشراء نفسه يفعّل العنصر مباشرة
   */
   void activateItem(String itemId) {
-    if (itemId.trim().isEmpty) return;
+    final cleanItemId = itemId.trim();
+
+    if (cleanItemId.isEmpty) return;
 
     state = state.copyWith(
       loading: true,
       error: null,
     );
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.storeItemActivate,
       'request_id': const Uuid().v4(),
-      'item_id': itemId.trim(),
+      'item_id': cleanItemId,
     });
   }
 
@@ -198,7 +204,7 @@ class StoreController extends StateNotifier<StoreState> {
       error: null,
     );
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.storePointsAdd,
       'request_id': const Uuid().v4(),
       'amount': amount,

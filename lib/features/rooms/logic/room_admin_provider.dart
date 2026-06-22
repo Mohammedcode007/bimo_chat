@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/ws_client.dart';
-import '../../../core/network/ws_provider.dart';
+import '../../../core/network/ws_background_controller.dart';
+import '../../../core/network/ws_event_bus.dart';
 import 'room_ws_handlers.dart';
 
 final roomAdminProvider =
     StateNotifierProvider<RoomAdminNotifier, RoomAdminState>((ref) {
-      return RoomAdminNotifier(ref);
-    });
+  return RoomAdminNotifier(ref);
+});
 
 class RoomAdminState {
   final bool loading;
@@ -85,14 +85,12 @@ class RoomAdminNotifier extends StateNotifier<RoomAdminState> {
 
   RoomAdminNotifier(this.ref) : super(RoomAdminState.initial());
 
-  WsClient get _ws => ref.read(wsClientProvider);
-
   StreamSubscription<Map<String, dynamic>>? _subscription;
 
   void attachListeners() {
     _subscription?.cancel();
 
-    _subscription = _ws.stream.listen((data) {
+    _subscription = WsEventBus.instance.stream.listen((data) {
       final handler = _s(data['handler']);
 
       if (handler != RoomWsEvents.roomUpdate) {
@@ -124,7 +122,7 @@ class RoomAdminNotifier extends StateNotifier<RoomAdminState> {
       activeRoomId: cleanRoomId,
     );
 
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomRolesList,
       'roomId': cleanRoomId,
       'role': cleanRole,
@@ -150,7 +148,7 @@ class RoomAdminNotifier extends StateNotifier<RoomAdminState> {
       activeRoomId: cleanRoomId,
     );
 
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomRoleRemove,
       'roomId': cleanRoomId,
       'targetUserId': cleanTargetUserId,
@@ -172,7 +170,7 @@ class RoomAdminNotifier extends StateNotifier<RoomAdminState> {
       activeRoomId: cleanRoomId,
     );
 
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomLogsList,
       'roomId': cleanRoomId,
       'limit': limit,
@@ -193,7 +191,10 @@ class RoomAdminNotifier extends StateNotifier<RoomAdminState> {
       activeRoomId: cleanRoomId,
     );
 
-    _ws.send({'handler': RoomWsHandlers.roomBannedList, 'roomId': cleanRoomId});
+    sendBackgroundWs({
+      'handler': RoomWsHandlers.roomBannedList,
+      'roomId': cleanRoomId,
+    });
   }
 
   void clearRoomAdminData(String roomId) {
@@ -355,7 +356,10 @@ class RoomAdminNotifier extends StateNotifier<RoomAdminState> {
 
     final next = Map<String, Map<String, dynamic>>.from(state.bannedByRoom);
 
-    next[roomId] = {'bannedUsers': bannedUsers, 'bannedIps': bannedIps};
+    next[roomId] = {
+      'bannedUsers': bannedUsers,
+      'bannedIps': bannedIps,
+    };
 
     state = state.copyWith(
       loading: false,

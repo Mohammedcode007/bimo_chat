@@ -5,26 +5,25 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/ws_events.dart';
 import '../../../core/constants/ws_handlers.dart';
-import '../../../core/network/ws_client.dart';
-import '../../../core/network/ws_provider.dart';
+import '../../../core/network/ws_background_controller.dart';
+import '../../../core/network/ws_event_bus.dart';
 import 'users_state.dart';
 
 final usersProvider = StateNotifierProvider<UsersController, UsersState>((ref) {
-  final ws = ref.watch(wsClientProvider);
-  return UsersController(ws);
+  return UsersController();
 });
 
 class UsersController extends StateNotifier<UsersState> {
-  final WsClient ws;
-
   StreamSubscription? _sub;
 
-  UsersController(this.ws) : super(const UsersState()) {
+  UsersController() : super(const UsersState()) {
     _listen();
   }
 
   void _listen() {
-    _sub = ws.stream.listen((data) {
+    _sub?.cancel();
+
+    _sub = WsEventBus.instance.stream.listen((data) {
       final handler = data['handler']?.toString();
       final type = data['type']?.toString();
 
@@ -143,7 +142,10 @@ class UsersController extends StateNotifier<UsersState> {
             return item['requestId']?.toString() == requestId;
           });
 
-          final item = {...request, 'fromUser': fromUser};
+          final item = {
+            ...request,
+            'fromUser': fromUser,
+          };
 
           state = state.copyWith(
             incomingFriendRequests: exists
@@ -333,56 +335,57 @@ class UsersController extends StateNotifier<UsersState> {
         return;
       }
 
-    if (handler == WsEvents.friendsGetEvent) {
-  if (type == 'success') {
-    final friendsList = data['friends'] is List
-        ? List<Map<String, dynamic>>.from(
-            (data['friends'] as List).map(
-              (item) => Map<String, dynamic>.from(item as Map),
-            ),
-          )
-        : <Map<String, dynamic>>[];
+      if (handler == WsEvents.friendsGetEvent) {
+        if (type == 'success') {
+          final friendsList = data['friends'] is List
+              ? List<Map<String, dynamic>>.from(
+                  (data['friends'] as List).map(
+                    (item) => Map<String, dynamic>.from(item as Map),
+                  ),
+                )
+              : <Map<String, dynamic>>[];
 
-    final friendIds = <String>{};
-    final blockedIds = Set<String>.from(state.blockedUserIds);
-    final pendingIds = Set<String>.from(state.pendingFriendUserIds);
+          final friendIds = <String>{};
+          final blockedIds = Set<String>.from(state.blockedUserIds);
+          final pendingIds = Set<String>.from(state.pendingFriendUserIds);
 
-    for (final friend in friendsList) {
-      final userId = friend['userId']?.toString() ?? '';
+          for (final friend in friendsList) {
+            final userId = friend['userId']?.toString() ?? '';
 
-      if (userId.isEmpty) continue;
+            if (userId.isEmpty) continue;
 
-      friendIds.add(userId);
+            friendIds.add(userId);
 
-      if (_readBool(friend['isBlocked']) ||
-          _readBool(friend['blockedByMe']) ||
-          _readBool(friend['hasBlockedMe'])) {
-        blockedIds.add(userId);
+            if (_readBool(friend['isBlocked']) ||
+                _readBool(friend['blockedByMe']) ||
+                _readBool(friend['hasBlockedMe'])) {
+              blockedIds.add(userId);
+            }
+
+            if (_readBool(friend['hasPendingFriendRequest']) ||
+                _readBool(friend['isPendingFriendRequest'])) {
+              pendingIds.add(userId);
+            }
+          }
+
+          state = state.copyWith(
+            loading: false,
+            error: null,
+            friends: friendsList,
+            friendUserIds: friendIds,
+            blockedUserIds: blockedIds,
+            pendingFriendUserIds: pendingIds,
+          );
+          return;
+        }
+
+        state = state.copyWith(
+          loading: false,
+          error: data['reason']?.toString() ?? 'friends_get_error',
+        );
+        return;
       }
 
-      if (_readBool(friend['hasPendingFriendRequest']) ||
-          _readBool(friend['isPendingFriendRequest'])) {
-        pendingIds.add(userId);
-      }
-    }
-
-    state = state.copyWith(
-      loading: false,
-      error: null,
-      friends: friendsList,
-      friendUserIds: friendIds,
-      blockedUserIds: blockedIds,
-      pendingFriendUserIds: pendingIds,
-    );
-    return;
-  }
-
-  state = state.copyWith(
-    loading: false,
-    error: data['reason']?.toString() ?? 'friends_get_error',
-  );
-  return;
-}
       if (handler == WsEvents.friendRemoveEvent) {
         if (type == 'success' || type == 'friend_removed') {
           final removedUserId = data['removedUserId']?.toString() ?? '';
@@ -496,7 +499,11 @@ class UsersController extends StateNotifier<UsersState> {
                   }).toList(),
             searchResults: state.searchResults.map((item) {
               if (item['userId']?.toString() == targetUserId) {
-                return {...item, 'isBlocked': blocked, 'blockedByMe': blocked};
+                return {
+                  ...item,
+                  'isBlocked': blocked,
+                  'blockedByMe': blocked,
+                };
               }
 
               return item;
@@ -520,12 +527,13 @@ class UsersController extends StateNotifier<UsersState> {
         );
         return;
       }
+
       if (handler == WsEvents.userProfileLiveUpdateEvent) {
         final user = data['user'] is Map<String, dynamic>
             ? Map<String, dynamic>.from(data['user'])
             : data['user'] is Map
-            ? Map<String, dynamic>.from(data['user'] as Map)
-            : <String, dynamic>{};
+                ? Map<String, dynamic>.from(data['user'] as Map)
+                : <String, dynamic>{};
 
         final userId =
             data['userId']?.toString() ?? user['userId']?.toString() ?? '';
@@ -549,21 +557,30 @@ class UsersController extends StateNotifier<UsersState> {
           blockedUserIds: blockedIds,
           friends: state.friends.map((item) {
             if (item['userId']?.toString() == userId) {
-              return {...item, ...user};
+              return {
+                ...item,
+                ...user,
+              };
             }
 
             return item;
           }).toList(),
           searchResults: state.searchResults.map((item) {
             if (item['userId']?.toString() == userId) {
-              return {...item, ...user};
+              return {
+                ...item,
+                ...user,
+              };
             }
 
             return item;
           }).toList(),
           blockedUsers: state.blockedUsers.map((item) {
             if (item['userId']?.toString() == userId) {
-              return {...item, ...user};
+              return {
+                ...item,
+                ...user,
+              };
             }
 
             return item;
@@ -571,7 +588,10 @@ class UsersController extends StateNotifier<UsersState> {
           profile:
               state.profile != null &&
                   state.profile!['userId']?.toString() == userId
-              ? {...state.profile!, ...user}
+              ? {
+                  ...state.profile!,
+                  ...user,
+                }
               : state.profile,
         );
 
@@ -590,13 +610,17 @@ class UsersController extends StateNotifier<UsersState> {
     final q = query.trim();
 
     if (q.isEmpty) {
-      state = state.copyWith(loading: false, error: null, searchResults: []);
+      state = state.copyWith(
+        loading: false,
+        error: null,
+        searchResults: [],
+      );
       return;
     }
 
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.usersSearch,
       'request_id': const Uuid().v4(),
       'query': q,
@@ -605,33 +629,41 @@ class UsersController extends StateNotifier<UsersState> {
   }
 
   void getUserProfile(String targetUserId) {
-    if (targetUserId.trim().isEmpty) return;
+    final cleanTargetUserId = targetUserId.trim();
 
-    state = state.copyWith(loading: true, error: null, profile: null);
+    if (cleanTargetUserId.isEmpty) return;
 
-    ws.send({
+    state = state.copyWith(
+      loading: true,
+      error: null,
+      profile: null,
+    );
+
+    sendBackgroundWs({
       'handler': WsHandlers.usersProfileGet,
       'request_id': const Uuid().v4(),
-      'target_user_id': targetUserId.trim(),
+      'target_user_id': cleanTargetUserId,
     });
   }
 
   void sendFriendRequest(String toUserId) {
-    if (toUserId.trim().isEmpty) return;
+    final cleanToUserId = toUserId.trim();
+
+    if (cleanToUserId.isEmpty) return;
 
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.friendRequestSend,
       'request_id': const Uuid().v4(),
-      'to_user_id': toUserId.trim(),
+      'to_user_id': cleanToUserId,
     });
   }
 
   void getIncomingFriendRequests() {
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.incomingFriendRequestsGet,
       'request_id': const Uuid().v4(),
     });
@@ -640,52 +672,58 @@ class UsersController extends StateNotifier<UsersState> {
   void getFriends() {
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.friendsGet,
       'request_id': const Uuid().v4(),
     });
   }
 
   void removeFriend(String friendUserId) {
-    if (friendUserId.trim().isEmpty) return;
+    final cleanFriendUserId = friendUserId.trim();
+
+    if (cleanFriendUserId.isEmpty) return;
 
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.friendRemove,
       'request_id': const Uuid().v4(),
-      'friend_user_id': friendUserId.trim(),
+      'friend_user_id': cleanFriendUserId,
     });
   }
 
   void blockUser(String targetUserId) {
-    if (targetUserId.trim().isEmpty) return;
+    final cleanTargetUserId = targetUserId.trim();
+
+    if (cleanTargetUserId.isEmpty) return;
 
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.usersBlock,
       'request_id': const Uuid().v4(),
-      'target_user_id': targetUserId.trim(),
+      'target_user_id': cleanTargetUserId,
     });
   }
 
   void unblockUser(String targetUserId) {
-    if (targetUserId.trim().isEmpty) return;
+    final cleanTargetUserId = targetUserId.trim();
+
+    if (cleanTargetUserId.isEmpty) return;
 
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.usersUnblock,
       'request_id': const Uuid().v4(),
-      'target_user_id': targetUserId.trim(),
+      'target_user_id': cleanTargetUserId,
     });
   }
 
   void getBlockedUsers() {
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.usersBlockedList,
       'request_id': const Uuid().v4(),
     });
@@ -695,16 +733,19 @@ class UsersController extends StateNotifier<UsersState> {
     required String requestId,
     required String action,
   }) {
-    if (requestId.trim().isEmpty) return;
-    if (action != 'accept' && action != 'reject') return;
+    final cleanRequestId = requestId.trim();
+    final cleanAction = action.trim();
+
+    if (cleanRequestId.isEmpty) return;
+    if (cleanAction != 'accept' && cleanAction != 'reject') return;
 
     state = state.copyWith(loading: true, error: null);
 
-    ws.send({
+    sendBackgroundWs({
       'handler': WsHandlers.friendRequestRespond,
       'request_id': const Uuid().v4(),
-      'request_id_value': requestId.trim(),
-      'action': action,
+      'request_id_value': cleanRequestId,
+      'action': cleanAction,
     });
   }
 

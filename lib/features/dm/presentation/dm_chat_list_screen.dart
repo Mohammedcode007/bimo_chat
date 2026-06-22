@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/responsive.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../users/logic/users_provider.dart';
@@ -413,15 +413,16 @@ class _ChatsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final lang = AppLocalizations.of(context);
 
     return SafeArea(
       bottom: false,
       child: Container(
         padding: EdgeInsetsDirectional.fromSTEB(
           R.size(context, 18),
+          R.size(context, 12),
           R.size(context, 14),
-          R.size(context, 12),
-          R.size(context, 12),
+          R.size(context, 10),
         ),
         decoration: BoxDecoration(
           color: colorScheme.surface,
@@ -433,57 +434,101 @@ class _ChatsHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-          GestureDetector(
-  onTap: onAvatarTap,
-  child: CircleAvatar(
-    radius: R.size(context, 22),
-    backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
-    backgroundImage: photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl),
-    child: photoUrl.trim().isEmpty
-        ? Text(
-            username.trim().isEmpty
-                ? '?'
-                : username.characters.first.toUpperCase(),
-            style: TextStyle(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w900,
-fontSize: R.sp(context, 18),
+            GestureDetector(
+              onTap: onAvatarTap,
+              child: CircleAvatar(
+                radius: R.size(context, 20),
+                backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
+                backgroundImage: photoUrl.trim().isEmpty
+                    ? null
+                    : NetworkImage(photoUrl),
+                child: photoUrl.trim().isEmpty
+                    ? Text(
+                        username.trim().isEmpty
+                            ? '?'
+                            : username.characters.first.toUpperCase(),
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: R.sp(context, 16),
+                        ),
+                      )
+                    : null,
+              ),
             ),
-          )
-        : null,
-  ),
-),
 
-            SizedBox(width: R.size(context, 12)),
+            SizedBox(width: R.size(context, 10)),
 
             Expanded(
               child: Text(
-                'Chats',
+                lang.t('chats'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: colorScheme.onSurface,
-                 fontSize: R.sp(context, 31),
-fontWeight: FontWeight.w900,
-height: 1.05,
+                  fontSize: R.sp(context, 29),
+                  height: 1.05,
                 ),
               ),
             ),
 
-            IconButton(
-              onPressed: onNotificationTap,
-              icon: const Icon(Icons.notifications_none_rounded),
+            SizedBox(
+              width: R.size(context, 36),
+              height: R.size(context, 36),
+              child: IconButton(
+                tooltip: lang.t('notifications'),
+                onPressed: onNotificationTap,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: R.size(context, 20),
+                icon: Icon(
+                  Icons.notifications_rounded,
+                  size: R.size(context, 33),
+                  color: colorScheme.onSurface,
+                ),
+              ),
             ),
 
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'settings') onSettingsTap();
-                if (value == 'logout') onLogoutTap();
-              },
-              itemBuilder: (_) {
-                return const [
-                  PopupMenuItem(value: 'settings', child: Text('Settings')),
-                  PopupMenuItem(value: 'logout', child: Text('Logout')),
-                ];
-              },
+            SizedBox(width: R.size(context, 2)),
+
+            SizedBox(
+              width: R.size(context, 34),
+              height: R.size(context, 36),
+              child: PopupMenuButton<String>(
+                tooltip: lang.t('menu'),
+                padding: EdgeInsets.zero,
+                splashRadius: R.size(context, 20),
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  size: R.size(context, 33),
+                  color: colorScheme.onSurface,
+                ),
+                onSelected: (value) {
+                  if (value == 'settings') {
+                    onSettingsTap();
+                  }
+
+                  if (value == 'logout') {
+                    onLogoutTap();
+                  }
+                },
+                itemBuilder: (_) {
+                  return [
+                    PopupMenuItem<String>(
+                      value: 'settings',
+                      child: Text(
+                        lang.t('settings'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Text(
+                        lang.t('logout'),
+                      ),
+                    ),
+                  ];
+                },
+              ),
             ),
           ],
         ),
@@ -492,71 +537,191 @@ height: 1.05,
   }
 }
 
-class _ChatsSearchBar extends StatelessWidget {
+class _ChatsSearchBar extends StatefulWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
 
-  const _ChatsSearchBar({required this.controller, required this.onChanged});
+  const _ChatsSearchBar({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ChatsSearchBar> createState() => _ChatsSearchBarState();
+}
+
+class _ChatsSearchBarState extends State<_ChatsSearchBar> {
+  late final FocusNode focusNode;
+
+  bool isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    focusNode = FocusNode();
+
+    focusNode.addListener(_handleFocusChange);
+    widget.controller.addListener(_handleTextChange);
+  }
+
+  void _handleFocusChange() {
+    if (!mounted) return;
+
+    setState(() {
+      isFocused = focusNode.hasFocus;
+    });
+  }
+
+  void _handleTextChange() {
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  void clearSearch() {
+    widget.controller.clear();
+    widget.onChanged('');
+    focusNode.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    focusNode.removeListener(_handleFocusChange);
+    widget.controller.removeListener(_handleTextChange);
+
+    focusNode.dispose();
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final lang = AppLocalizations.of(context);
+
+    final hasText = widget.controller.text.trim().isNotEmpty;
 
     return Container(
       color: colorScheme.surface,
       padding: EdgeInsetsDirectional.fromSTEB(
-        R.size(context, 18),
-        R.size(context, 6),
-        R.size(context, 18),
-        R.size(context, 12),
+        R.size(context, 16),
+        R.size(context, 8),
+        R.size(context, 16),
+        R.size(context, 14),
       ),
-      child: Container(
-        height: R.size(context, 54),
-        padding: EdgeInsetsDirectional.symmetric(
-          horizontal: R.size(context, 14),
-        ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: R.size(context, 58),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(R.size(context, 18)),
-        ),
-        child: Row(
-          children: [
-          Icon(
-  Icons.search_rounded,
-  size: R.size(context, 25),
-  color: colorScheme.onSurface.withValues(alpha: 0.55),
-),
-            SizedBox(width: R.size(context, 8)),
-            Expanded(
-              child: TextField(
-  controller: controller,
-  onChanged: onChanged,
-  style: TextStyle(
-    color: colorScheme.onSurface,
-    fontSize: R.sp(context, 18),
-    fontWeight: FontWeight.w600,
-    height: 1.15,
-  ),
-  decoration: InputDecoration(
-    border: InputBorder.none,
-    hintText: 'Search chats',
-    hintStyle: TextStyle(
-      color: colorScheme.onSurface.withValues(alpha: 0.55),
-      fontSize: R.sp(context, 18),
-      fontWeight: FontWeight.w600,
-      height: 1.15,
-    ),
-    isDense: true,
-    contentPadding: EdgeInsets.zero,
-  ),
-),
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(
+            R.size(context, 18),
+          ),
+          border: Border.all(
+            color: isFocused
+                ? colorScheme.primary
+                : colorScheme.outline.withValues(
+                    alpha: 0.45,
+                  ),
+            width: isFocused
+                ? R.size(context, 2)
+                : R.size(context, 1.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(
+                alpha: isFocused ? 0.14 : 0.08,
+              ),
+              blurRadius: isFocused
+                  ? R.size(context, 12)
+                  : R.size(context, 7),
+              offset: Offset(
+                0,
+                R.size(context, 3),
+              ),
             ),
           ],
+        ),
+        child: TextField(
+          controller: widget.controller,
+          focusNode: focusNode,
+          onChanged: widget.onChanged,
+          textInputAction: TextInputAction.search,
+          cursorColor: colorScheme.primary,
+          textAlignVertical: TextAlignVertical.center,
+          style: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: R.sp(context, 18),
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
+          decoration: InputDecoration(
+            hintText: lang.t('search_chats_or_messages'),
+            hintStyle: TextStyle(
+              color: colorScheme.onSurface.withValues(
+                alpha: 0.58,
+              ),
+              fontSize: R.sp(context, 17),
+              fontWeight: FontWeight.w600,
+              height: 1,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: R.size(context, 27),
+              color: isFocused
+                  ? colorScheme.primary
+                  : colorScheme.onSurface.withValues(
+                      alpha: 0.68,
+                    ),
+            ),
+            prefixIconConstraints: BoxConstraints(
+              minWidth: R.size(context, 54),
+              minHeight: R.size(context, 58),
+            ),
+            suffixIcon: hasText
+                ? IconButton(
+                    tooltip: lang.t('clear_search'),
+                    onPressed: clearSearch,
+                    icon: Container(
+                      width: R.size(context, 28),
+                      height: R.size(context, 28),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: colorScheme.onSurface.withValues(
+                          alpha: 0.10,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: R.size(context, 18),
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  )
+                : null,
+            suffixIconConstraints: BoxConstraints(
+              minWidth: R.size(context, 52),
+              minHeight: R.size(context, 58),
+            ),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsetsDirectional.only(
+              top: R.size(context, 2),
+              bottom: R.size(context, 2),
+              end: R.size(context, 12),
+            ),
+          ),
         ),
       ),
     );
   }
 }
+
+
 
 class _DmChatTile extends StatelessWidget {
   final LocalChatModel chat;
@@ -592,6 +757,7 @@ class _DmChatTile extends StatelessWidget {
       if (chat.lastMessageType == 'video') return 'Video';
       if (chat.lastMessageType == 'audio') return 'Voice message';
       if (chat.lastMessageType == 'file') return 'File';
+
       return 'No messages yet';
     }
 
@@ -601,7 +767,6 @@ class _DmChatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     final hasUnread = chat.unreadCount > 0;
 
     return Material(
@@ -609,52 +774,85 @@ class _DmChatTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        child: Padding(
+        child: Container(
           padding: EdgeInsetsDirectional.fromSTEB(
-            R.size(context, 18),
-            R.size(context, 8),
-            R.size(context, 18),
-            R.size(context, 8),
+            R.size(context, 16),
+            R.size(context, 11),
+            R.size(context, 16),
+            R.size(context, 11),
+          ),
+          decoration: BoxDecoration(
+            color: hasUnread
+                ? colorScheme.primary.withValues(alpha: 0.035)
+                : Colors.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: colorScheme.outlineVariant.withValues(
+                  alpha: 0.32,
+                ),
+                width: R.size(context, 0.8),
+              ),
+            ),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  CircleAvatar(
-                    radius: R.size(context, 28),
-                    backgroundColor: colorScheme.primary.withValues(
-                      alpha: 0.12,
+                  Container(
+                    padding: EdgeInsets.all(
+                      R.size(context, 1.5),
                     ),
-                    backgroundImage: chat.peerPhotoUrl.trim().isEmpty
-                        ? null
-                        : NetworkImage(chat.peerPhotoUrl),
-                    child: chat.peerPhotoUrl.trim().isEmpty
-                        ? Text(
-                            chat.peerUsername.isEmpty
-                                ? '?'
-                                : chat.peerUsername.characters.first
-                                      .toUpperCase(),
-                            style: TextStyle(
-                              color: colorScheme.primary,
-                              fontSize: R.sp(context, 18),
-                              fontWeight: FontWeight.w800,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: hasUnread
+                            ? colorScheme.primary.withValues(alpha: 0.45)
+                            : colorScheme.outline.withValues(alpha: 0.16),
+                        width: R.size(context, 1.3),
+                      ),
+                    ),
+                    child: CircleAvatar(
+                      radius: R.size(context, 34),
+                      backgroundColor: colorScheme.primary.withValues(
+                        alpha: 0.12,
+                      ),
+                      backgroundImage: chat.peerPhotoUrl.trim().isEmpty
+                          ? null
+                          : NetworkImage(
+                              chat.peerPhotoUrl.trim(),
                             ),
-                          )
-                        : null,
+                      child: chat.peerPhotoUrl.trim().isEmpty
+                          ? Text(
+                              chat.peerUsername.trim().isEmpty
+                                  ? '?'
+                                  : chat.peerUsername.characters.first
+                                      .toUpperCase(),
+                              style: TextStyle(
+                                color: colorScheme.primary,
+                                fontSize: R.sp(context, 21),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            )
+                          : null,
+                    ),
                   ),
 
                   PositionedDirectional(
-                    end: R.size(context, 2),
+                    end: R.size(context, 1),
                     bottom: R.size(context, 2),
                     child: Container(
-                      width: R.size(context, 12),
-                      height: R.size(context, 12),
+                      width: R.size(context, 15),
+                      height: R.size(context, 15),
                       decoration: BoxDecoration(
-                        color: isOnline ? Colors.green : colorScheme.outline,
+                        color: isOnline
+                            ? const Color(0xFF22C55E)
+                            : colorScheme.outline.withValues(alpha: 0.65),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: colorScheme.surface,
-                          width: R.size(context, 2),
+                          width: R.size(context, 2.5),
                         ),
                       ),
                     ),
@@ -662,39 +860,74 @@ class _DmChatTile extends StatelessWidget {
                 ],
               ),
 
-              SizedBox(width: R.size(context, 12)),
+              SizedBox(
+                width: R.size(context, 13),
+              ),
 
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      chat.peerUsername,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-fontSize: R.sp(context, 25),
-height: 1.1,
-                        fontWeight: hasUnread
-                            ? FontWeight.w800
-                            : FontWeight.w700,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chat.peerUsername,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colorScheme.onSurface,
+                              fontSize: R.sp(context, 22),
+                              height: 1.1,
+                              fontWeight: hasUnread
+                                  ? FontWeight.w900
+                                  : FontWeight.w800,
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(
+                          width: R.size(context, 8),
+                        ),
+
+                        Text(
+                          time,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: hasUnread
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant.withValues(
+                                    alpha: 0.62,
+                                  ),
+                            fontSize: R.sp(context, 14),
+                            height: 1,
+                            fontWeight: hasUnread
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
 
-                    SizedBox(height: R.size(context, 5)),
+                    SizedBox(
+                      height: R.size(context, 7),
+                    ),
 
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         if (chat.lastMessageType != 'text') ...[
                           Icon(
                             lastMessageIcon(chat.lastMessageType),
-                            size: R.size(context, 15),
-                            color: colorScheme.onSurface.withValues(
-                              alpha: 0.55,
+                            size: R.size(context, 17),
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.72,
                             ),
                           ),
-                          SizedBox(width: R.size(context, 4)),
+                          SizedBox(
+                            width: R.size(context, 5),
+                          ),
                         ],
 
                         Expanded(
@@ -706,74 +939,76 @@ height: 1.1,
                               color: isTyping
                                   ? colorScheme.primary
                                   : hasUnread
-                                  ? colorScheme.onSurface
-                                  : colorScheme.onSurface.withValues(
-                                      alpha: 0.58,
-                                    ),
-fontSize: R.sp(context, 18),
-height: 1.15,
-                              fontWeight: hasUnread
+                                      ? colorScheme.onSurface.withValues(
+                                          alpha: 0.88,
+                                        )
+                                      : colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.72),
+                              fontSize: R.sp(context, 17),
+                              height: 1.15,
+                              fontWeight: isTyping || hasUnread
                                   ? FontWeight.w700
                                   : FontWeight.w500,
                             ),
                           ),
                         ),
+
+                        SizedBox(
+                          width: R.size(context, 8),
+                        ),
+
+                        if (hasUnread)
+                          Container(
+                            constraints: BoxConstraints(
+                              minWidth: R.size(context, 25),
+                              minHeight: R.size(context, 25),
+                            ),
+                            padding: EdgeInsetsDirectional.symmetric(
+                              horizontal: R.size(context, 7),
+                            ),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(
+                                R.size(context, 999),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.20,
+                                  ),
+                                  blurRadius: R.size(context, 5),
+                                  offset: Offset(
+                                    0,
+                                    R.size(context, 2),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              chat.unreadCount > 99
+                                  ? '99+'
+                                  : chat.unreadCount.toString(),
+                              style: TextStyle(
+                                color: colorScheme.onPrimary,
+                                fontSize: R.sp(context, 12),
+                                height: 1,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: R.size(context, 23),
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.42,
+                            ),
+                          ),
                       ],
                     ),
                   ],
                 ),
-              ),
-
-              SizedBox(width: R.size(context, 10)),
-
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    time,
-                    style: TextStyle(
-                      color: hasUnread
-                          ? colorScheme.primary
-                          : colorScheme.onSurface.withValues(alpha: 0.48),
-fontSize: R.sp(context, 18),
-height: 1.1,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-
-                  SizedBox(height: R.size(context, 8)),
-
-                  if (hasUnread)
-                    Container(
-                      constraints: BoxConstraints(
-                        minWidth: R.size(context, 30),
-                        minHeight: R.size(context, 30),
-                      ),
-                      padding: EdgeInsetsDirectional.symmetric(
-                        horizontal: R.size(context, 7),
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        chat.unreadCount > 99
-                            ? '99+'
-                            : chat.unreadCount.toString(),
-                        style: TextStyle(
-                          color: colorScheme.onPrimary,
-                          fontSize: R.sp(context, 15),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    )
-                  else
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: colorScheme.onSurface.withValues(alpha: 0.35),
-                    ),
-                ],
               ),
             ],
           ),
@@ -782,7 +1017,6 @@ height: 1.1,
     );
   }
 }
-
 class _EmptyChats extends StatelessWidget {
   final bool hasSearch;
 

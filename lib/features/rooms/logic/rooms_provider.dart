@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/ws_client.dart';
-import '../../../core/network/ws_provider.dart';
+import '../../../core/network/ws_background_controller.dart';
+import '../../../core/network/ws_event_bus.dart';
 import '../models/room_model.dart';
 import '../models/room_live_message_model.dart';
 import 'room_ws_handlers.dart';
@@ -88,17 +88,16 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
 
   RoomsNotifier(this.ref) : super(RoomsState.initial());
 
-  WsClient get _ws => ref.read(wsClientProvider);
-
   StreamSubscription<Map<String, dynamic>>? _roomSubscription;
 
   void attachRoomSocketListeners() {
     _roomSubscription?.cancel();
 
-    _roomSubscription = _ws.stream.listen((data) {
+    _roomSubscription = WsEventBus.instance.stream.listen((data) {
       final handler = _s(data['handler']);
 
       print('📥 ROOM WS EVENT: $handler => $data');
+
       final directType = _s(data['type']);
       final directHandler = _s(data['handler']);
 
@@ -115,6 +114,7 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
         _handleRoomBanned(data);
         return;
       }
+
       if (handler == RoomWsEvents.roomList) {
         _handleRoomList(data);
         return;
@@ -175,7 +175,10 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
   void listRooms(String tab) {
     state = state.copyWith(loading: true, error: null, currentTab: tab);
 
-    _ws.send({'handler': RoomWsHandlers.roomList, 'tab': tab});
+    sendBackgroundWs({
+      'handler': RoomWsHandlers.roomList,
+      'tab': tab,
+    });
   }
 
   void createRoom({
@@ -184,7 +187,7 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     String password = '',
     bool voiceEnabled = false,
   }) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomCreate,
       'name': name,
       'description': description,
@@ -194,7 +197,7 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
   }
 
   void joinRoom({required String roomId, String password = ''}) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomJoin,
       'roomId': roomId,
       'password': password,
@@ -202,7 +205,10 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
   }
 
   void leaveRoom(String roomId) {
-    _ws.send({'handler': RoomWsHandlers.roomLeave, 'roomId': roomId});
+    sendBackgroundWs({
+      'handler': RoomWsHandlers.roomLeave,
+      'roomId': roomId,
+    });
   }
 
   void clearRoomLocalData(String roomId) {
@@ -241,7 +247,7 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
 
     if (cleanText.isEmpty) return;
 
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomMessageSend,
       'roomId': roomId,
       'type': 'text',
@@ -254,17 +260,28 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     required String roomId,
     required String type,
     required String url,
+    String text = '',
     String fileName = '',
     String mimeType = '',
     int sizeBytes = 0,
     Map<String, dynamic>? replyTo,
   }) {
-    _ws.send({
+    final cleanRoomId = roomId.trim();
+    final cleanType = type.trim().toLowerCase();
+    final cleanUrl = url.trim();
+    final cleanText = text.trim();
+
+    if (cleanRoomId.isEmpty) return;
+    if (cleanType.isEmpty) return;
+    if (cleanUrl.isEmpty) return;
+
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomMessageSend,
-      'roomId': roomId,
-      'type': type,
+      'roomId': cleanRoomId,
+      'type': cleanType,
+      'text': cleanText,
       'media': {
-        'url': url,
+        'url': cleanUrl,
         'fileName': fileName,
         'mimeType': mimeType,
         'sizeBytes': sizeBytes,
@@ -273,45 +290,46 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     });
   }
 
-Future<void> sendMediaBase64Message({
-  required String roomId,
-  required String type,
-  required String mediaBase64,
-  String fileName = '',
-  String mimeType = '',
-  int sizeBytes = 0,
-  String duration = '',
-  Map<String, dynamic>? replyTo,
-}) async {
-  final cleanRoomId = roomId.trim();
-  final cleanType = type.trim().toLowerCase();
-  final cleanBase64 = mediaBase64.trim();
+  Future<void> sendMediaBase64Message({
+    required String roomId,
+    required String type,
+    required String mediaBase64,
+    String fileName = '',
+    String mimeType = '',
+    int sizeBytes = 0,
+    String duration = '',
+    Map<String, dynamic>? replyTo,
+  }) async {
+    final cleanRoomId = roomId.trim();
+    final cleanType = type.trim().toLowerCase();
+    final cleanBase64 = mediaBase64.trim();
 
-  if (cleanRoomId.isEmpty) return;
-  if (cleanType.isEmpty) return;
-  if (cleanBase64.isEmpty) return;
+    if (cleanRoomId.isEmpty) return;
+    if (cleanType.isEmpty) return;
+    if (cleanBase64.isEmpty) return;
 
-  _ws.send({
-    'handler': RoomWsHandlers.roomMessageSend,
-    'roomId': cleanRoomId,
-    'type': cleanType,
-    'text': cleanType == 'audio' || cleanType == 'voice'
-        ? 'Voice message'
-        : '',
-    'mediaBase64': cleanBase64,
-    'fileName': fileName,
-    'mimeType': mimeType,
-    'sizeBytes': sizeBytes,
-    'duration': duration,
-    'replyTo': replyTo,
-  });
-}
+    sendBackgroundWs({
+      'handler': RoomWsHandlers.roomMessageSend,
+      'roomId': cleanRoomId,
+      'type': cleanType,
+      'text': cleanType == 'audio' || cleanType == 'voice'
+          ? 'Voice message'
+          : '',
+      'mediaBase64': cleanBase64,
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'sizeBytes': sizeBytes,
+      'duration': duration,
+      'replyTo': replyTo,
+    });
+  }
+
   void reactToMessage({
     required String roomId,
     required String messageId,
     required String emoji,
   }) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomMessageReaction,
       'roomId': roomId,
       'messageId': messageId,
@@ -325,7 +343,7 @@ Future<void> sendMediaBase64Message({
     required String targetUsername,
     required String newRole,
   }) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomRoleSet,
       'roomId': roomId,
       'targetUserId': targetUserId,
@@ -339,7 +357,7 @@ Future<void> sendMediaBase64Message({
     required String targetUserId,
     String targetUsername = '',
   }) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomKick,
       'roomId': roomId,
       'targetUserId': targetUserId,
@@ -353,7 +371,7 @@ Future<void> sendMediaBase64Message({
     required String targetUsername,
     bool banIp = false,
   }) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomBan,
       'roomId': roomId,
       'targetUserId': targetUserId,
@@ -363,7 +381,7 @@ Future<void> sendMediaBase64Message({
   }
 
   void setPassword({required String roomId, required String password}) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomPasswordSet,
       'roomId': roomId,
       'password': password,
@@ -371,7 +389,7 @@ Future<void> sendMediaBase64Message({
   }
 
   void removePassword(String roomId) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomPasswordSet,
       'roomId': roomId,
       'password': '',
@@ -379,7 +397,7 @@ Future<void> sendMediaBase64Message({
   }
 
   void setRoomLock({required String roomId, required bool locked}) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomLockSet,
       'roomId': roomId,
       'locked': locked,
@@ -387,7 +405,7 @@ Future<void> sendMediaBase64Message({
   }
 
   void setPinnedMessage({required String roomId, required String text}) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomPinSet,
       'roomId': roomId,
       'text': text,
@@ -395,11 +413,14 @@ Future<void> sendMediaBase64Message({
   }
 
   void toggleFavorite(String roomId) {
-    _ws.send({'handler': RoomWsHandlers.roomFavoriteToggle, 'roomId': roomId});
+    sendBackgroundWs({
+      'handler': RoomWsHandlers.roomFavoriteToggle,
+      'roomId': roomId,
+    });
   }
 
   void boostRoom({required String roomId, int value = 1}) {
-    _ws.send({
+    sendBackgroundWs({
       'handler': RoomWsHandlers.roomBoost,
       'roomId': roomId,
       'value': value,
@@ -436,9 +457,9 @@ Future<void> sendMediaBase64Message({
 
     final rooms = list is List
         ? list
-              .whereType<Map<String, dynamic>>()
-              .map(RoomModel.fromJson)
-              .toList()
+            .whereType<Map<String, dynamic>>()
+            .map(RoomModel.fromJson)
+            .toList()
         : <RoomModel>[];
 
     final nextCounts = Map<String, int>.from(state.activeCountByRoom);
@@ -468,8 +489,8 @@ Future<void> sendMediaBase64Message({
     state = state.copyWith(
       rooms: exists
           ? state.rooms
-                .map((item) => item.roomId == room.roomId ? room : item)
-                .toList()
+              .map((item) => item.roomId == room.roomId ? room : item)
+              .toList()
           : [room, ...state.rooms],
     );
   }
@@ -557,9 +578,8 @@ Future<void> sendMediaBase64Message({
     state = state.copyWith(
       activeRoomId: finalRoomId,
       myUserId: currentUserId.isNotEmpty ? currentUserId : state.myUserId,
-      myUsername: currentUsername.isNotEmpty
-          ? currentUsername
-          : state.myUsername,
+      myUsername:
+          currentUsername.isNotEmpty ? currentUsername : state.myUsername,
       messagesByRoom: messages,
       activeCountByRoom: nextCounts,
       usersByRoom: nextUsers,
@@ -625,7 +645,9 @@ Future<void> sendMediaBase64Message({
           message.messageKind == 'leave' ||
           message.messageKind == 'role' ||
           message.messageKind == 'system';
+
       if (!isSystemLikeMessage) return false;
+
       final sameUser = item.fromUserId == message.fromUserId;
       final sameKind = item.messageKind == message.messageKind;
 
@@ -735,6 +757,7 @@ Future<void> sendMediaBase64Message({
       _handleRoomActiveCount(data);
       return;
     }
+
     if (type == 'pin') {
       final pinned = map['pinnedMessage'];
       final pinText = pinned is Map ? _s(pinned['text']) : '';
@@ -745,17 +768,10 @@ Future<void> sendMediaBase64Message({
 
       final oldMessages = nextMessages[roomId] ?? <RoomLiveMessageModel>[];
 
-      /*
-    حذف أي رسالة مثبتة قديمة.
-  */
       final withoutOldPinned = oldMessages.where((message) {
         return message.messageId != 'pinned_$roomId';
       }).toList();
 
-      /*
-    لو النص فارغ يبقى إلغاء الرسالة المثبتة.
-    نحذف مكانها من شاشة الشات.
-  */
       if (pinText.isEmpty) {
         nextMessages[roomId] = withoutOldPinned;
 
@@ -774,9 +790,6 @@ Future<void> sendMediaBase64Message({
         return;
       }
 
-      /*
-    لو فيه نص جديد، نضيف الرسالة المثبتة أعلى الشات.
-  */
       nextMessages[roomId] = [
         RoomLiveMessageModel.fromJson({
           'messageId': 'pinned_$roomId',
@@ -820,12 +833,7 @@ Future<void> sendMediaBase64Message({
 
       return;
     }
-    /*
-    مهم:
-    room.update type role لا يعرض رسالة في الشات.
-    هو فقط يحدّث role داخل usersByRoom حتى تظهر النجمة فورًا.
-    رسالة الرول نفسها تأتي من room.message.
-  */
+
     if (type == 'role') {
       final targetUserId = _s(map['targetUserId'] ?? map['target_user_id']);
       final newRole = _s(map['newRole'] ?? map['new_role'], fallback: 'none');
@@ -841,7 +849,10 @@ Future<void> sendMediaBase64Message({
       nextUsers[roomId] = oldUsers.map((user) {
         if (_s(user['userId']) != targetUserId) return user;
 
-        return {...user, 'role': newRole};
+        return {
+          ...user,
+          'role': newRole,
+        };
       }).toList();
 
       state = state.copyWith(usersByRoom: nextUsers);
@@ -933,17 +944,13 @@ List<Map<String, dynamic>> _readUsersList(dynamic value) {
           'socketId': _s(map['socketId']),
           'joinedAt': _s(map['joinedAt']),
           'dc': map['dc'] == true,
-
           'role': _s(map['role'], fallback: 'none'),
-
           'accountColor': _s(
             map['accountColor'] ?? map['nameColor'] ?? map['color'],
           ),
-
           'badgeKey': _s(map['badgeKey']),
           'badgeName': _s(map['badgeName']),
           'badgeValue': _s(map['badgeValue']),
-
           'verificationType': _s(map['verificationType'], fallback: 'none'),
         };
       })

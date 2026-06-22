@@ -221,8 +221,8 @@ class _SenderNameInside extends StatelessWidget {
 
 final nameStyle = TextStyle(
   color: message.sender.nameColor ?? fallbackNameColor,
-  fontSize: R.sp(context, 19),
-  fontWeight: FontWeight.w800,
+  fontSize: R.sp(context, 20),
+  fontWeight: FontWeight.w700,
   height: 1.08,
   letterSpacing: -0.2,
   fontFamily: null,
@@ -398,9 +398,8 @@ return Text(
   softWrap: true,
   style: TextStyle(
     color: textColor,
-    fontSize: R.sp(context, 22),
+    fontSize: R.sp(context, 25),
     height: 1.35,
-    fontWeight: FontWeight.w600,
     fontFamily: null,
     fontFamilyFallback: const [
       'Roboto',

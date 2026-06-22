@@ -12,7 +12,8 @@ static const dmOpenEvent = 'dm_open_event';
 static const dmCloseEvent = 'dm_close_event';
   static const userSettingsEvent = 'user_settings_event';
   static const userBlockEvent = 'user_block_event';
-
+static const String notificationEvent =
+    'notification_event';
   static const friendsListEvent = 'friends_list_event';
   static const friendRequestEvent = 'friend_request_event';
 
@@ -57,6 +58,5 @@ static const dmCloseEvent = 'dm_close_event';
   static const storeActivateEvent = 'store_activate_event';
   static const storePointsEvent = 'store_points_event';
 
-  static const notificationEvent = 'notification_event';
   static const errorEvent = 'error_event';
 }

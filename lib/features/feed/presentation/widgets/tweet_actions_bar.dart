@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/responsive.dart';
-import '../../data/tweet_model.dart';
+import '../../data/tweet_models.dart';
 
 class TweetActionsBar extends StatelessWidget {
   final TweetModel tweet;
+
   final VoidCallback onCommentTap;
-  final VoidCallback onRepostTap;
+  final VoidCallback onRetweetTap;
   final VoidCallback onLikeTap;
   final VoidCallback onShareTap;
 
@@ -14,7 +15,7 @@ class TweetActionsBar extends StatelessWidget {
     super.key,
     required this.tweet,
     required this.onCommentTap,
-    required this.onRepostTap,
+    required this.onRetweetTap,
     required this.onLikeTap,
     required this.onShareTap,
   });
@@ -22,46 +23,81 @@ class TweetActionsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(top: R.size(context, 10)),
+      padding: EdgeInsets.only(
+        top: R.size(context, 10),
+      ),
       child: Row(
         children: [
+          /*
+            عدد التعليقات الحقيقي.
+          */
           _ActionItem(
             icon: Icons.mode_comment_outlined,
             value: tweet.commentsCount,
             onTap: onCommentTap,
           ),
+
           const Spacer(),
+
+          /*
+            الريتويت الحقيقي.
+          */
           _ActionItem(
             icon: Icons.repeat_rounded,
-            value: tweet.repostsCount,
-            color: tweet.isReposted ? const Color(0xFF00BA7C) : null,
-            onTap: onRepostTap,
+            value: tweet.retweetsCount,
+            color: tweet.isRetweeted
+                ? const Color(0xFF00BA7C)
+                : null,
+            onTap: onRetweetTap,
           ),
+
           const Spacer(),
+
+          /*
+            الإعجاب الحقيقي.
+          */
           _ActionItem(
             icon: tweet.isLiked
                 ? Icons.favorite_rounded
                 : Icons.favorite_border_rounded,
             value: tweet.likesCount,
-            color: tweet.isLiked ? const Color(0xFFF91880) : null,
+            color: tweet.isLiked
+                ? const Color(0xFFF91880)
+                : null,
             onTap: onLikeTap,
           ),
+
           const Spacer(),
+
+          /*
+            عدد المشاهدات الحقيقي.
+          */
           _ActionItem(
             icon: Icons.bar_chart_rounded,
             value: tweet.viewsCount,
+
+            /*
+              لا نزيد المشاهدة عند الضغط هنا.
+              المشاهدة تُسجل عند ظهور التويتة للمستخدم.
+            */
             onTap: () {},
           ),
+
           const Spacer(),
+
           InkWell(
             onTap: onShareTap,
             borderRadius: BorderRadius.circular(999),
             child: Padding(
-              padding: EdgeInsets.all(R.size(context, 6)),
+              padding: EdgeInsets.all(
+                R.size(context, 6),
+              ),
               child: Icon(
                 Icons.ios_share_rounded,
                 size: R.size(context, 18),
-                color: Colors.black.withValues(alpha: 0.52),
+                color: Colors.black.withValues(
+                  alpha: 0.52,
+                ),
               ),
             ),
           ),
@@ -86,7 +122,11 @@ class _ActionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentColor = color ?? Colors.black.withValues(alpha: 0.52);
+    final currentColor =
+        color ??
+        Colors.black.withValues(
+          alpha: 0.52,
+        );
 
     return InkWell(
       onTap: onTap,
@@ -97,17 +137,26 @@ class _ActionItem extends StatelessWidget {
           vertical: R.size(context, 6),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: R.size(context, 18), color: currentColor),
-            SizedBox(width: R.size(context, 4)),
-            Text(
-              formatCount(value),
-              style: TextStyle(
-                color: currentColor,
-                fontSize: R.sp(context, 13),
-                fontWeight: FontWeight.w500,
-              ),
+            Icon(
+              icon,
+              size: R.size(context, 18),
+              color: currentColor,
             ),
+            if (value > 0) ...[
+              SizedBox(
+                width: R.size(context, 4),
+              ),
+              Text(
+                formatCount(value),
+                style: TextStyle(
+                  color: currentColor,
+                  fontSize: R.sp(context, 13),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -116,17 +165,21 @@ class _ActionItem extends StatelessWidget {
 
   String formatCount(int count) {
     if (count >= 1000000) {
-      return '${(count / 1000000).toStringAsFixed(1)}M';
+      final value = count / 1000000;
+
+      return value % 1 == 0
+          ? '${value.toInt()}M'
+          : '${value.toStringAsFixed(1)}M';
     }
 
     if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}K';
+      final value = count / 1000;
+
+      return value % 1 == 0
+          ? '${value.toInt()}K'
+          : '${value.toStringAsFixed(1)}K';
     }
 
-    if (count == 0) {
-      return '';
-    }
-
-    return '$count';
+    return count.toString();
   }
 }

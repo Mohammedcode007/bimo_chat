@@ -6,7 +6,11 @@ class WsHandlers {
   static const usersProfileUpdate = 'users.profile.update';
   static const usersProfileImageUpdate = 'users.profile.image.update';
   static const usersDeleteAccount = 'users.account.delete';
+static const String notificationsList =
+    'notifications.list';
 
+static const String notificationsRead =
+    'notifications.read';
   static const usersSettingsUpdate = 'users.settings.update';
   static const usersBlock = 'users.block';
   static const usersUnblock = 'users.unblock';

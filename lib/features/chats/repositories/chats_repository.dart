@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/ws_handlers.dart';
 import '../../../../core/network/ws_client.dart';
+import '../../../../core/network/ws_background_controller.dart';
 
 class ChatsRepository {
   final WsClient wsClient;
@@ -14,7 +15,7 @@ class ChatsRepository {
   }) {
     final localMessageId = const Uuid().v4();
 
-    wsClient.send({
+    sendBackgroundWs({
       'handler': WsHandlers.chatsMessageSend,
       'request_id': const Uuid().v4(),
       'receiver_id': receiverId,
@@ -27,14 +28,14 @@ class ChatsRepository {
   }
 
   void startTyping(String receiverId) {
-    wsClient.send({
+    sendBackgroundWs({
       'handler': WsHandlers.chatsTypingStart,
       'receiver_id': receiverId,
     });
   }
 
   void stopTyping(String receiverId) {
-    wsClient.send({
+    sendBackgroundWs({
       'handler': WsHandlers.chatsTypingStop,
       'receiver_id': receiverId,
     });

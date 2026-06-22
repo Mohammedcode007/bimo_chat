@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/responsive.dart';
-import '../../data/tweet_model.dart';
+import '../../data/tweet_models.dart';
 import 'mention_text.dart';
 import 'tweet_actions_bar.dart';
 import 'tweet_media_preview.dart';
 
 class TweetCard extends StatelessWidget {
   final TweetModel tweet;
+
   final VoidCallback onTap;
   final VoidCallback onCommentTap;
-  final VoidCallback onRepostTap;
+  final VoidCallback onRetweetTap;
   final VoidCallback onLikeTap;
   final VoidCallback onDeleteTap;
   final VoidCallback onShareTap;
@@ -20,7 +21,7 @@ class TweetCard extends StatelessWidget {
     required this.tweet,
     required this.onTap,
     required this.onCommentTap,
-    required this.onRepostTap,
+    required this.onRetweetTap,
     required this.onLikeTap,
     required this.onDeleteTap,
     required this.onShareTap,
@@ -28,64 +29,136 @@ class TweetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final theme =
+        Theme.of(context);
+
+    final colorScheme =
+        theme.colorScheme;
 
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsetsDirectional.fromSTEB(
+        padding:
+            EdgeInsetsDirectional.fromSTEB(
           R.size(context, 14),
-          R.size(context, 13),
+          R.size(context, 11),
           R.size(context, 12),
           R.size(context, 10),
         ),
         decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
+          color:
+              theme.scaffoldBackgroundColor,
           border: Border(
             bottom: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+              color: colorScheme
+                  .outlineVariant
+                  .withValues(
+                alpha: 0.45,
+              ),
               width: 0.7,
             ),
           ),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
-            _Avatar(tweet: tweet),
+            /*
+              عنوان إعادة النشر يظهر فوق التويتة.
 
-            SizedBox(width: R.size(context, 11)),
-
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(top: R.size(context, 1)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _TweetHeader(tweet: tweet, onDeleteTap: onDeleteTap),
-
-                    if (tweet.text.trim().isNotEmpty) ...[
-                      SizedBox(height: R.size(context, 5)),
-                      MentionText(
-                        text: tweet.text,
-                        fontSize: 18,
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ],
-
-                    TweetMediaPreview(tweet: tweet),
-
-                    TweetActionsBar(
-                      tweet: tweet,
-                      onCommentTap: onCommentTap,
-                      onRepostTap: onRepostTap,
-                      onLikeTap: onLikeTap,
-                      onShareTap: onShareTap,
-                    ),
-                  ],
+              تمت إضافة مسافة من البداية حتى يكون
+              العنوان بمحاذاة محتوى التويتة وليس الأفاتار.
+            */
+            if (tweet.retweetBy != null) ...[
+              Padding(
+                padding:
+                    EdgeInsetsDirectional.only(
+                  start: R.size(
+                    context,
+                    59,
+                  ),
+                  bottom: R.size(
+                    context,
+                    7,
+                  ),
+                ),
+                child: _RetweetHeader(
+                  username:
+                      tweet.retweetBy!.username,
                 ),
               ),
+            ],
+
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                _Avatar(
+                  tweet: tweet,
+                ),
+
+                SizedBox(
+                  width: R.size(
+                    context,
+                    11,
+                  ),
+                ),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      /*
+                        الاسم يبدأ مباشرة من أعلى الأفاتار.
+                        لا يوجد Padding علوي هنا.
+                      */
+                      _TweetHeader(
+                        tweet: tweet,
+                        onDeleteTap:
+                            onDeleteTap,
+                      ),
+
+                      if (tweet.text
+                          .trim()
+                          .isNotEmpty) ...[
+                        SizedBox(
+                          height: R.size(
+                            context,
+                            6,
+                          ),
+                        ),
+
+                        MentionText(
+                          text:
+                              tweet.text,
+                          fontSize: 18,
+                          color:
+                              colorScheme.onSurface,
+                          fontWeight:
+                              FontWeight.w400,
+                        ),
+                      ],
+
+                      TweetMediaPreview(
+                        tweet: tweet,
+                      ),
+
+                      TweetActionsBar(
+                        tweet: tweet,
+                        onCommentTap:
+                            onCommentTap,
+                        onRetweetTap:
+                            onRetweetTap,
+                        onLikeTap:
+                            onLikeTap,
+                        onShareTap:
+                            onShareTap,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -97,47 +170,93 @@ class TweetCard extends StatelessWidget {
 class _Avatar extends StatelessWidget {
   final TweetModel tweet;
 
-  const _Avatar({required this.tweet});
+  const _Avatar({
+    required this.tweet,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme =
+        Theme.of(context).colorScheme;
+
+    final avatarUrl =
+        tweet.author?.photoUrl.trim() ??
+        '';
 
     return CircleAvatar(
-      radius: R.size(context, 24),
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      child: tweet.avatarUrl.trim().isNotEmpty
+      radius: R.size(
+        context,
+        24,
+      ),
+      backgroundColor:
+          colorScheme
+              .surfaceContainerHighest,
+      child: avatarUrl.isNotEmpty
           ? ClipOval(
               child: Image.network(
-                tweet.avatarUrl,
-                width: R.size(context, 48),
-                height: R.size(context, 48),
+                avatarUrl,
+                width: R.size(
+                  context,
+                  48,
+                ),
+                height: R.size(
+                  context,
+                  48,
+                ),
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  return _AvatarFallback(tweet: tweet);
+                errorBuilder: (
+                  context,
+                  error,
+                  stackTrace,
+                ) {
+                  return _AvatarFallback(
+                    tweet: tweet,
+                  );
                 },
               ),
             )
-          : _AvatarFallback(tweet: tweet),
+          : _AvatarFallback(
+              tweet: tweet,
+            ),
     );
   }
 }
 
-class _AvatarFallback extends StatelessWidget {
+class _AvatarFallback
+    extends StatelessWidget {
   final TweetModel tweet;
 
-  const _AvatarFallback({required this.tweet});
+  const _AvatarFallback({
+    required this.tweet,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme =
+        Theme.of(context).colorScheme;
+
+    final username =
+        tweet.author?.username.trim() ??
+        '';
+
+    final firstCharacter =
+        username.isNotEmpty
+            ? username.characters
+                .first
+                .toUpperCase()
+            : '?';
 
     return Text(
-      tweet.authorName.isEmpty ? '?' : tweet.authorName[0].toUpperCase(),
+      firstCharacter,
       style: TextStyle(
-        color: colorScheme.onSurface.withValues(alpha: 0.75),
-        fontSize: R.sp(context, 18),
-        fontWeight: FontWeight.w900,
+        color: colorScheme.onSurface
+            .withValues(
+          alpha: 0.75,
+        ),
+        fontSize:
+            R.sp(context, 18),
+        fontWeight:
+            FontWeight.w900,
       ),
     );
   }
@@ -147,76 +266,291 @@ class _TweetHeader extends StatelessWidget {
   final TweetModel tweet;
   final VoidCallback onDeleteTap;
 
-  const _TweetHeader({required this.tweet, required this.onDeleteTap});
+  const _TweetHeader({
+    required this.tweet,
+    required this.onDeleteTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    final username = tweet.author?.username.trim() ?? '';
+
+    final time = _formatTweetTime(
+      tweet.createdAt,
+    );
+
     return SizedBox(
-      height: R.size(context, 24),
+      height: R.size(context, 30),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Flexible(
-            child: Text(
-              tweet.authorName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontSize: R.sp(context, 17),
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
+          /*
+            هذا الجزء يأخذ كل المساحة المتاحة،
+            بدون تحديد عرض ثابت للاسم.
+          */
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                /*
+                  الاسم يأخذ أكبر مساحة ممكنة،
+                  وعند امتلاء السطر يظهر ...
+                */
+                Flexible(
+                  child: Text(
+                    username.isEmpty
+                        ? 'Unknown user'
+                        : username,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: R.sp(context, 20),
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ),
+
+                if (_isVerified(tweet)) ...[
+                  SizedBox(
+                    width: R.size(context, 4),
+                  ),
+                  Icon(
+                    Icons.verified_rounded,
+                    size: R.size(context, 16),
+                    color: const Color(0xFF1D9BF0),
+                  ),
+                ],
+
+                if (time.isNotEmpty) ...[
+                  SizedBox(
+                    width: R.size(context, 6),
+                  ),
+                  Text(
+                    '·',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 15),
+                      height: 1,
+                    ),
+                  ),
+                  SizedBox(
+                    width: R.size(context, 6),
+                  ),
+                  Text(
+                    time,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: R.sp(context, 14),
+                      fontWeight: FontWeight.w400,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
 
-          SizedBox(width: R.size(context, 5)),
-
-          Flexible(
-            child: Text(
-              '@${tweet.username} · ${tweet.time}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+          /*
+            أيقونة الثلاث نقاط خارج Expanded،
+            لذلك تظل دائمًا في أقصى نهاية السطر.
+          */
+          SizedBox(
+            width: R.size(context, 30),
+            height: R.size(context, 30),
+            child: PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              color: colorScheme.surface,
+              tooltip: '',
+              position: PopupMenuPosition.under,
+              icon: Icon(
+                Icons.more_horiz_rounded,
+                size: R.size(context, 21),
                 color: colorScheme.onSurfaceVariant,
-                fontSize: R.sp(context, 15.5),
-                fontWeight: FontWeight.w400,
-                height: 1,
               ),
-            ),
-          ),
+              onSelected: (value) {
+                if (value == 'delete') {
+                  onDeleteTap();
+                }
+              },
+              itemBuilder: (context) {
+                if (tweet.canDelete) {
+                  return const [
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.red,
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            'Delete Tweet',
+                            style: TextStyle(
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ];
+                }
 
-          SizedBox(width: R.size(context, 2)),
-
-          PopupMenuButton<String>(
-            padding: EdgeInsets.zero,
-            color: colorScheme.surface,
-            icon: Icon(
-              Icons.more_horiz_rounded,
-              size: R.size(context, 21),
-              color: colorScheme.onSurfaceVariant,
+                return const [
+                  PopupMenuItem<String>(
+                    value: 'report',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.flag_outlined,
+                        ),
+                        SizedBox(width: 10),
+                        Text('Report'),
+                      ],
+                    ),
+                  ),
+                ];
+              },
             ),
-            onSelected: (value) {
-              if (value == 'delete') {
-                onDeleteTap();
-              }
-            },
-            itemBuilder: (_) {
-              return [
-                if (tweet.isMine)
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete Tweet'),
-                  )
-                else
-                  const PopupMenuItem(value: 'report', child: Text('Report')),
-              ];
-            },
           ),
         ],
       ),
     );
   }
+
+  bool _isVerified(TweetModel tweet) {
+    final verificationType =
+        tweet.author?.verificationType.trim().toLowerCase() ?? '';
+
+    return verificationType.isNotEmpty &&
+        verificationType != 'none' &&
+        verificationType != 'false' &&
+        verificationType != '0';
+  }
+}
+class _RetweetHeader
+    extends StatelessWidget {
+  final String username;
+
+  const _RetweetHeader({
+    required this.username,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme =
+        Theme.of(context).colorScheme;
+
+    final cleanUsername =
+        username.trim();
+
+    return Row(
+      mainAxisSize:
+          MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.repeat_rounded,
+          size: R.size(
+            context,
+            16,
+          ),
+          color: const Color(
+            0xFF00BA7C,
+          ),
+        ),
+
+        SizedBox(
+          width: R.size(
+            context,
+            5,
+          ),
+        ),
+
+        Flexible(
+          child: Text(
+            cleanUsername.isEmpty
+                ? 'Reposted'
+                : '$cleanUsername reposted',
+            maxLines: 1,
+            overflow:
+                TextOverflow.ellipsis,
+            style: TextStyle(
+              color: colorScheme
+                  .onSurfaceVariant,
+              fontSize:
+                  R.sp(context, 13),
+              fontWeight:
+                  FontWeight.w700,
+              height: 1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _formatTweetTime(
+  DateTime? createdAt,
+) {
+  if (createdAt == null) {
+    return '';
+  }
+
+  final now =
+      DateTime.now();
+
+  final localCreatedAt =
+      createdAt.toLocal();
+
+  final difference =
+      now.difference(
+    localCreatedAt,
+  );
+
+  if (difference.isNegative ||
+      difference.inSeconds < 60) {
+    return 'now';
+  }
+
+  if (difference.inMinutes < 60) {
+    return '${difference.inMinutes}m';
+  }
+
+  if (difference.inHours < 24) {
+    return '${difference.inHours}h';
+  }
+
+  if (difference.inDays < 7) {
+    return '${difference.inDays}d';
+  }
+
+  final day =
+      localCreatedAt.day
+          .toString()
+          .padLeft(
+            2,
+            '0',
+          );
+
+  final month =
+      localCreatedAt.month
+          .toString()
+          .padLeft(
+            2,
+            '0',
+          );
+
+  if (localCreatedAt.year ==
+      now.year) {
+    return '$day/$month';
+  }
+
+  return '$day/$month/${localCreatedAt.year}';
 }
