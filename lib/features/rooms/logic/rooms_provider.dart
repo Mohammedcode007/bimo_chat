@@ -211,33 +211,53 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     });
   }
 
-  void clearRoomLocalData(String roomId) {
-    final id = roomId.trim();
+void clearRoomLocalData(String roomId) {
+  final id = roomId.trim();
 
-    if (id.isEmpty) return;
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  print('🧹 [ROOM_PROVIDER_CLEAR_LOCAL_DATA_START]');
+  print('roomId raw: $roomId');
+  print('roomId clean: $id');
+  print('activeRoomId before: ${state.activeRoomId}');
+  print('messagesExists before: ${state.messagesByRoom.containsKey(id)}');
+  print('usersExists before: ${state.usersByRoom.containsKey(id)}');
+  print('count before: ${state.activeCountByRoom[id]}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    final nextMessages = Map<String, List<RoomLiveMessageModel>>.from(
-      state.messagesByRoom,
-    );
-
-    final nextUsers = Map<String, List<Map<String, dynamic>>>.from(
-      state.usersByRoom,
-    );
-
-    final nextCounts = Map<String, int>.from(state.activeCountByRoom);
-
-    nextMessages.remove(id);
-    nextUsers.remove(id);
-    nextCounts.remove(id);
-
-    state = state.copyWith(
-      activeRoomId: state.activeRoomId == id ? null : state.activeRoomId,
-      messagesByRoom: nextMessages,
-      usersByRoom: nextUsers,
-      activeCountByRoom: nextCounts,
-    );
+  if (id.isEmpty) {
+    print('❌ [ROOM_PROVIDER_CLEAR_LOCAL_DATA_ABORT]');
+    print('reason: empty roomId');
+    return;
   }
 
+  final nextMessages = Map<String, List<RoomLiveMessageModel>>.from(
+    state.messagesByRoom,
+  );
+
+  final nextUsers = Map<String, List<Map<String, dynamic>>>.from(
+    state.usersByRoom,
+  );
+
+  final nextCounts = Map<String, int>.from(state.activeCountByRoom);
+
+  nextMessages.remove(id);
+  nextUsers.remove(id);
+  nextCounts.remove(id);
+
+  state = state.copyWith(
+    activeRoomId: state.activeRoomId == id ? null : state.activeRoomId,
+    messagesByRoom: nextMessages,
+    usersByRoom: nextUsers,
+    activeCountByRoom: nextCounts,
+  );
+
+  print('✅ [ROOM_PROVIDER_CLEAR_LOCAL_DATA_DONE]');
+  print('activeRoomId after: ${state.activeRoomId}');
+  print('messagesExists after: ${state.messagesByRoom.containsKey(id)}');
+  print('usersExists after: ${state.usersByRoom.containsKey(id)}');
+  print('count after: ${state.activeCountByRoom[id]}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
   void sendTextMessage({
     required String roomId,
     required String text,
@@ -586,40 +606,85 @@ class RoomsNotifier extends StateNotifier<RoomsState> {
     );
   }
 
-  void _handleRoomLeave(dynamic data) {
-    final map = _asMap(data);
-    final roomId = _s(map['roomId']);
+void _handleRoomLeave(dynamic data) {
+  final map = _asMap(data);
 
-    if (roomId.isEmpty) return;
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  print('📥 [ROOM_PROVIDER_LEAVE_RESPONSE_RAW]');
+  print('data: $data');
+  print('keys: ${map.keys.toList()}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    final activeUsers = _readUsersList(map['activeUsers'] ?? map['users']);
-    final activeCount = _i(
-      map['activeCount'],
-      fallback: activeUsers.isNotEmpty ? activeUsers.length : 0,
-    );
+  final roomMap = map['room'];
 
-    final nextCounts = Map<String, int>.from(state.activeCountByRoom);
-    nextCounts[roomId] = activeCount;
+  final roomId = _s(map['roomId']).isNotEmpty
+      ? _s(map['roomId'])
+      : _s(roomMap is Map ? roomMap['roomId'] : null);
 
-    final nextUsers = Map<String, List<Map<String, dynamic>>>.from(
-      state.usersByRoom,
-    );
+  print('🚪 [ROOM_PROVIDER_LEAVE_RESPONSE_PARSED]');
+  print('roomId parsed: $roomId');
+  print('state.activeRoomId before: ${state.activeRoomId}');
+  print('activeCount raw: ${map['activeCount']}');
+  print('activeUsers type: ${map['activeUsers'].runtimeType}');
+  print('users type: ${map['users'].runtimeType}');
 
-    nextUsers[roomId] = activeUsers;
-
-    final updatedRooms = state.rooms.map((room) {
-      if (room.roomId != roomId) return room;
-      return room.copyWith(activeCount: activeCount);
-    }).toList();
-
-    state = state.copyWith(
-      activeRoomId: state.activeRoomId == roomId ? null : state.activeRoomId,
-      activeCountByRoom: nextCounts,
-      usersByRoom: nextUsers,
-      rooms: updatedRooms,
-    );
+  if (roomId.isEmpty) {
+    print('❌ [ROOM_PROVIDER_LEAVE_RESPONSE_ABORT]');
+    print('reason: roomId empty');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    return;
   }
 
+  final activeUsers = _readUsersList(map['activeUsers'] ?? map['users']);
+
+  final activeCount = _i(
+    map['activeCount'],
+    fallback: activeUsers.isNotEmpty ? activeUsers.length : 0,
+  );
+
+  print('👥 [ROOM_PROVIDER_LEAVE_USERS_PARSED]');
+  print('activeUsers.length: ${activeUsers.length}');
+  print('activeCount parsed: $activeCount');
+
+  final nextCounts = Map<String, int>.from(state.activeCountByRoom);
+  nextCounts[roomId] = activeCount;
+
+  final nextUsers = Map<String, List<Map<String, dynamic>>>.from(
+    state.usersByRoom,
+  );
+
+  /*
+    مهم:
+    بعد الخروج لا تترك بيانات المستخدمين القديمة.
+    نستخدم activeUsers القادمة من السيرفر.
+    ولو السيرفر أرسل قائمة فاضية، تبقى فاضية.
+  */
+  nextUsers[roomId] = activeUsers;
+
+  final updatedRooms = state.rooms.map((room) {
+    if (room.roomId != roomId) return room;
+
+    return room.copyWith(activeCount: activeCount);
+  }).toList();
+
+  final shouldClearActiveRoom = state.activeRoomId == roomId;
+
+  state = state.copyWith(
+    activeRoomId: shouldClearActiveRoom ? null : state.activeRoomId,
+    activeCountByRoom: nextCounts,
+    usersByRoom: nextUsers,
+    rooms: updatedRooms,
+    error: null,
+  );
+
+  print('✅ [ROOM_PROVIDER_LEAVE_STATE_UPDATED]');
+  print('roomId: $roomId');
+  print('shouldClearActiveRoom: $shouldClearActiveRoom');
+  print('state.activeRoomId after: ${state.activeRoomId}');
+  print('activeUsers after length: ${state.usersByRoom[roomId]?.length}');
+  print('count after: ${state.activeCountByRoom[roomId]}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
   void _handleRoomMessage(dynamic data) {
     final map = _asMap(data);
     final messageJson = map['message'];

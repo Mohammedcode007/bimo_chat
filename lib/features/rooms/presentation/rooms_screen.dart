@@ -1,8 +1,6 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../../../core/localization/app_localizations.dart';
 import 'package:bimo_chat/features/rooms/presentation/room_chat_screen.dart';
 import 'package:bimo_chat/features/settings/presentation/settings_screen.dart';
 
@@ -109,18 +107,12 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     return colors[hash % colors.length];
   }
 
-  ui.RoomModel _toUiRoom(
-    dynamic room,
-    int index,
-    Map<String, int> counts,
-  ) {
-    final activeCount =
-        counts[room.roomId] ?? room.activeCount;
+  ui.RoomModel _toUiRoom(dynamic room, int index, Map<String, int> counts) {
+    final activeCount = counts[room.roomId] ?? room.activeCount;
 
     final name = room.name.toString().trim();
 
-    final avatarText =
-        name.isNotEmpty ? name.characters.first : 'غ';
+    final avatarText = name.isNotEmpty ? name.characters.first : 'غ';
 
     final roleText = room.role.toString().trim();
 
@@ -149,37 +141,31 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
   void openCreateRoom() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const CreateRoomScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const CreateRoomScreen()),
     ).then((_) {
       if (!mounted) return;
 
-      _roomsNotifier.listRooms(
-        _tabFromFilter(selectedFilter),
-      );
+      _roomsNotifier.listRooms(_tabFromFilter(selectedFilter));
     });
   }
 
   void openNotifications() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const NotificationsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
     );
   }
 
   void openSearch() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const RoomsSearchScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const RoomsSearchScreen()),
     );
   }
 
-  String roomErrorText(String error) {
+  String roomErrorText(BuildContext context, String error) {
+    final localizations = AppLocalizations.of(context);
+
     final value = error.trim();
     final lower = value.toLowerCase();
 
@@ -189,44 +175,41 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
         lower == 'user_banned' ||
         value == 'ROOM_BANNED' ||
         value == 'BANNED') {
-      return 'أنت محظور من هذه الغرفة';
+      return localizations.t('room_banned');
     }
 
     if (lower == 'room_not_found') {
-      return 'الغرفة غير موجودة';
+      return localizations.t('room_not_found');
     }
 
-    if (lower == 'room_password_required' ||
-        lower == 'password_required') {
-      return 'هذه الغرفة تحتاج كلمة مرور';
+    if (lower == 'room_password_required' || lower == 'password_required') {
+      return localizations.t('room_password_required');
     }
 
     if (lower == 'wrong_room_password' ||
         lower == 'invalid_room_password' ||
         lower == 'wrong_password' ||
         lower == 'invalid_password') {
-      return 'كلمة مرور الغرفة غير صحيحة';
+      return localizations.t('wrong_room_password');
     }
 
     if (lower == 'room_locked_for_none' ||
         lower == 'room_locked_for_members_only' ||
         lower == 'members_only' ||
         lower == 'members_only_room') {
-      return 'هذه الغرفة للأعضاء فقط';
+      return localizations.t('room_members_only');
     }
 
     if (lower == 'room_join_failed') {
-      return 'تعذر دخول الغرفة';
+      return localizations.t('room_join_failed');
     }
 
     if (lower == 'room_not_joined') {
-      return 'يجب دخول الغرفة أولًا';
+      return localizations.t('room_not_joined');
     }
 
-    if (value.isEmpty ||
-        lower == 'null' ||
-        lower == 'undefined') {
-      return 'حدث خطأ';
+    if (value.isEmpty || lower == 'null' || lower == 'undefined') {
+      return localizations.t('error_occurred');
     }
 
     return value;
@@ -246,22 +229,25 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
     return true;
   }
 
-  Future<String?> openRoomPasswordDialog(
-    ui.RoomModel room,
-  ) async {
-    final controller = TextEditingController();
+Future<String?> openRoomPasswordDialog(
+  ui.RoomModel room,
+) async {
+  final controller = TextEditingController();
+  final localizations = AppLocalizations.of(context);
 
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final theme = Theme.of(dialogContext);
-        final colorScheme = theme.colorScheme;
+  final result = await showDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) {
+      final theme = Theme.of(dialogContext);
+      final colorScheme = theme.colorScheme;
 
-        return AlertDialog(
+      return Directionality(
+        textDirection:
+            AppLocalizations.textDirectionOf(dialogContext),
+        child: AlertDialog(
           title: Text(
-            'كلمة مرور الغرفة',
-            textDirection: TextDirection.rtl,
+            localizations.t('room_password'),
             style: TextStyle(
               color: colorScheme.onSurface,
               fontWeight: FontWeight.w700,
@@ -271,9 +257,8 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
             controller: controller,
             obscureText: true,
             autofocus: true,
-            textDirection: TextDirection.ltr,
             decoration: InputDecoration(
-              hintText: 'اكتب كلمة المرور',
+              hintText: localizations.t('enter_password'),
               prefixIcon: const Icon(
                 Icons.lock_outline,
               ),
@@ -293,7 +278,9 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
               onPressed: () {
                 Navigator.pop(dialogContext);
               },
-              child: const Text('إلغاء'),
+              child: Text(
+                localizations.t('cancel'),
+              ),
             ),
             FilledButton(
               onPressed: () {
@@ -302,46 +289,50 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                   controller.text.trim(),
                 );
               },
-              child: const Text('دخول'),
+              child: Text(
+                localizations.t('enter'),
+              ),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
 
-    controller.dispose();
+  controller.dispose();
 
-    final password = result?.trim();
+  final password = result?.trim();
 
-    if (password == null || password.isEmpty) {
-      return null;
-    }
-
-    return password;
+  if (password == null || password.isEmpty) {
+    return null;
   }
 
-  Future<void> openMembersOnlyDialog() async {
-    if (!mounted) return;
+  return password;
+}
+Future<void> openMembersOnlyDialog() async {
+  if (!mounted) return;
 
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  final theme = Theme.of(context);
+  final colorScheme = theme.colorScheme;
+  final localizations = AppLocalizations.of(context);
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return AlertDialog(
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) {
+      return Directionality(
+        textDirection:
+            AppLocalizations.textDirectionOf(dialogContext),
+        child: AlertDialog(
           title: Text(
-            'الغرفة للأعضاء فقط',
-            textDirection: TextDirection.rtl,
+            localizations.t('members_only_title'),
             style: TextStyle(
               color: colorScheme.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),
           content: Text(
-            'لا يمكنك دخول هذه الغرفة الآن لأنها مخصصة للأعضاء فقط.',
-            textDirection: TextDirection.rtl,
+            localizations.t('members_only_message'),
             style: TextStyle(
               color: colorScheme.onSurfaceVariant,
               height: 1.4,
@@ -352,90 +343,155 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
               onPressed: () {
                 Navigator.pop(dialogContext);
               },
-              child: const Text('حسنًا'),
+              child: Text(
+                localizations.t('ok'),
+              ),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  Future<void> openRoom(ui.RoomModel room) async {
-    if (isOpeningRoom) return;
-
-    final roomsState = ref.read(roomsProvider);
-
-    final usersInRoom =
-        roomsState.usersByRoom[room.id] ?? [];
-
-    final isAlreadyActiveRoom =
-        roomsState.activeRoomId == room.id;
-
-    final isAlreadyInRoom =
-        isAlreadyActiveRoom || usersInRoom.isNotEmpty;
-
-    /*
-      المستخدم موجود بالفعل داخل الغرفة،
-      لذلك لا نرسل join مرة أخرى.
-    */
-    if (isAlreadyInRoom) {
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RoomChatScreen(
-            room: room,
-          ),
         ),
       );
+    },
+  );
+}
+Future<void> openRoom(ui.RoomModel room) async {
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  print('🚪 [ROOMS_SCREEN_OPEN_ROOM_START]');
+  print('room.id: ${room.id}');
+  print('room.name: ${room.name}');
+  print('room.role: ${room.role}');
+  print('room.hasPassword: ${room.hasPassword}');
+  print('room.isLockedForNone: ${room.isLockedForNone}');
+  print('isOpeningRoom before: $isOpeningRoom');
+  print('pendingOpenRoom before: ${pendingOpenRoom?.id}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-      return;
-    }
-
-    String password = '';
-
-    final isCreator = room.role == 'creator';
-
-    final isRankedUser =
-        room.role == 'creator' ||
-        room.role == 'owner' ||
-        room.role == 'admin' ||
-        room.role == 'member';
-
-    if (room.isLockedForNone && !isRankedUser) {
-      await openMembersOnlyDialog();
-      return;
-    }
-
-    if (room.hasPassword && !isCreator) {
-      final result = await openRoomPasswordDialog(room);
-
-      if (!mounted) return;
-
-      if (result == null || result.isEmpty) {
-        return;
-      }
-
-      password = result;
-    }
-
-    pendingOpenRoom = room;
-    isOpeningRoom = true;
-
-    _roomsNotifier.joinRoom(
-      roomId: room.id,
-      password: password,
-    );
+  if (isOpeningRoom) {
+    print('⚠️ [ROOMS_SCREEN_OPEN_ROOM_ABORT]');
+    print('reason: isOpeningRoom already true');
+    print('pendingOpenRoom: ${pendingOpenRoom?.id}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    return;
   }
 
-  void openSettings() {
+  final roomsState = ref.read(roomsProvider);
+
+  final usersInRoom = roomsState.usersByRoom[room.id] ?? [];
+
+  final myUserId = roomsState.myUserId.trim();
+
+final isAlreadyActiveRoom = roomsState.activeRoomId == room.id;
+
+final isMyUserInRoom = usersInRoom.any((user) {
+  final userId = (
+    user['userId'] ??
+    user['id'] ??
+    user['_id'] ??
+    ''
+  ).toString().trim();
+
+  return myUserId.isNotEmpty && userId == myUserId;
+});
+
+/*
+  مهم:
+  لا نعتمد على activeRoomId وحده.
+  لأن activeRoomId قد يظل قديمًا بعد الخروج.
+*/
+final isAlreadyInRoom = isMyUserInRoom;
+
+  print('🔎 [ROOMS_SCREEN_OPEN_ROOM_STATE_CHECK]');
+  print('room.id: ${room.id}');
+  print('state.activeRoomId: ${roomsState.activeRoomId}');
+  print('state.myUserId: ${roomsState.myUserId}');
+  print('state.myUsername: ${roomsState.myUsername}');
+  print('usersInRoom.length: ${usersInRoom.length}');
+  print('isAlreadyActiveRoom: $isAlreadyActiveRoom');
+  print('isMyUserInRoom: $isMyUserInRoom');
+  print('isAlreadyInRoom: $isAlreadyInRoom');
+
+  for (final user in usersInRoom) {
+    print('👤 [ROOMS_SCREEN_USER_IN_ROOM]');
+    print('rawUser: $user');
+    print('userId: ${user['userId'] ?? user['id'] ?? user['_id']}');
+    print('username: ${user['username'] ?? user['name']}');
+  }
+
+  if (isAlreadyInRoom) {
+    print('✅ [ROOMS_SCREEN_OPEN_WITHOUT_JOIN]');
+    print('reason: current user already active/in users list');
+    print('roomId: ${room.id}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    if (!mounted) return;
+
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => SettingScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => RoomChatScreen(room: room)),
     );
+
+    return;
+  }
+
+  String password = '';
+
+  final isCreator = room.role == 'creator';
+
+  final isRankedUser =
+      room.role == 'creator' ||
+      room.role == 'owner' ||
+      room.role == 'admin' ||
+      room.role == 'member';
+
+  print('🔐 [ROOMS_SCREEN_ROOM_ACCESS_CHECK]');
+  print('isCreator: $isCreator');
+  print('isRankedUser: $isRankedUser');
+  print('hasPassword: ${room.hasPassword}');
+  print('isLockedForNone: ${room.isLockedForNone}');
+
+  if (room.isLockedForNone && !isRankedUser) {
+    print('⛔ [ROOMS_SCREEN_MEMBERS_ONLY]');
+    print('roomId: ${room.id}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    await openMembersOnlyDialog();
+    return;
+  }
+
+  if (room.hasPassword && !isCreator) {
+    print('🔑 [ROOMS_SCREEN_PASSWORD_REQUIRED]');
+    print('roomId: ${room.id}');
+
+    final result = await openRoomPasswordDialog(room);
+
+    if (!mounted) return;
+
+    if (result == null || result.isEmpty) {
+      print('⚠️ [ROOMS_SCREEN_PASSWORD_CANCELLED]');
+      print('roomId: ${room.id}');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      return;
+    }
+
+    password = result;
+
+    print('✅ [ROOMS_SCREEN_PASSWORD_ENTERED]');
+    print('passwordEmpty: ${password.trim().isEmpty}');
+  }
+
+  pendingOpenRoom = room;
+  isOpeningRoom = true;
+
+  print('📤 [ROOMS_SCREEN_JOIN_REQUEST]');
+  print('roomId: ${room.id}');
+  print('passwordEmpty: ${password.trim().isEmpty}');
+  print('pendingOpenRoom after: ${pendingOpenRoom?.id}');
+  print('isOpeningRoom after: $isOpeningRoom');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  _roomsNotifier.joinRoom(roomId: room.id, password: password);
+}
+  void openSettings() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => SettingScreen()));
   }
 
   void logout() {
@@ -447,149 +503,167 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       selectedFilter = filter;
     });
 
-    _roomsNotifier.listRooms(
-      _tabFromFilter(filter),
-    );
+    _roomsNotifier.listRooms(_tabFromFilter(filter));
   }
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+
     final roomsState = ref.watch(roomsProvider);
 
     final rooms = roomsState.rooms
         .asMap()
         .entries
         .map(
-          (entry) => _toUiRoom(
-            entry.value,
-            entry.key,
-            roomsState.activeCountByRoom,
-          ),
+          (entry) =>
+              _toUiRoom(entry.value, entry.key, roomsState.activeCountByRoom),
         )
         .toList();
 
-    final activeCount = rooms
-        .where(
-          (room) => room.isActive,
-        )
-        .length;
+    final activeCount = rooms.where((room) => room.isActive).length;
 
     /*
       الاستماع إلى تسجيل الخروج.
     */
-    ref.listen<AuthState>(
-      authProvider,
-      (previous, next) {
-        if (!mounted) return;
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (!mounted) return;
 
-        /*
+      /*
           previous يمكن أن يكون null،
           لذلك نستخدم ?. وليس .
         */
-        final wasLoggedIn =
-            previous?.loggedIn == true;
+      final wasLoggedIn = previous?.loggedIn == true;
 
-        final isLoggedOutNow =
-            next.loggedIn == false;
+      final isLoggedOutNow = next.loggedIn == false;
 
-        if (wasLoggedIn && isLoggedOutNow) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const LoginScreen(),
-            ),
-            (route) => false,
-          );
+      if (wasLoggedIn && isLoggedOutNow) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
 
-          return;
-        }
+        return;
+      }
 
-        final error = next.error?.trim() ?? '';
+      final error = next.error?.trim() ?? '';
 
-        if (error.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      },
-    );
+      if (error.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), behavior: SnackBarBehavior.floating),
+        );
+      }
+    });
 
     /*
       الاستماع إلى نتائج دخول الغرف والأخطاء.
     */
-    ref.listen<RoomsState>(
-      roomsProvider,
-      (previous, next) {
-        if (!mounted) return;
+ ref.listen<RoomsState>(roomsProvider, (previous, next) {
+  if (!mounted) return;
 
-        final error = next.error;
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  print('👂 [ROOMS_SCREEN_PROVIDER_LISTEN]');
+  print('previous.activeRoomId: ${previous?.activeRoomId}');
+  print('next.activeRoomId: ${next.activeRoomId}');
+  print('next.error: ${next.error}');
+  print('pendingOpenRoom: ${pendingOpenRoom?.id}');
+  print('isOpeningRoom: $isOpeningRoom');
+  print('next.myUserId: ${next.myUserId}');
+  print('next.myUsername: ${next.myUsername}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-        if (isRealRoomError(error)) {
-          isOpeningRoom = false;
-          pendingOpenRoom = null;
+  final error = next.error;
 
-          final message = roomErrorText(error!);
-          final lower = error.trim().toLowerCase();
+  if (isRealRoomError(error)) {
+    print('❌ [ROOMS_SCREEN_JOIN_ERROR]');
+    print('error: $error');
+    print('pendingOpenRoom before clear: ${pendingOpenRoom?.id}');
+    print('isOpeningRoom before clear: $isOpeningRoom');
 
-          if (lower == 'room_locked_for_none' ||
-              lower == 'room_locked_for_members_only' ||
-              lower == 'members_only' ||
-              lower == 'members_only_room') {
-            openMembersOnlyDialog();
-            return;
-          }
+    isOpeningRoom = false;
+    pendingOpenRoom = null;
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                message,
-                textDirection: TextDirection.rtl,
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+    final message = roomErrorText(context, error!);
+    final lower = error.trim().toLowerCase();
 
-          return;
-        }
+    if (lower == 'room_locked_for_none' ||
+        lower == 'room_locked_for_members_only' ||
+        lower == 'members_only' ||
+        lower == 'members_only_room') {
+      openMembersOnlyDialog();
+      return;
+    }
 
-        final roomToOpen = pendingOpenRoom;
-
-        if (roomToOpen == null) return;
-
-        final joinedByActiveRoom =
-            next.activeRoomId == roomToOpen.id;
-
-        final usersInRoom =
-            next.usersByRoom[roomToOpen.id] ?? [];
-
-        final joinedByUsersList =
-            usersInRoom.isNotEmpty;
-
-        if (!joinedByActiveRoom &&
-            !joinedByUsersList) {
-          return;
-        }
-
-        pendingOpenRoom = null;
-        isOpeningRoom = false;
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => RoomChatScreen(
-              room: roomToOpen,
-            ),
-          ),
-        );
-      },
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, textDirection: TextDirection.rtl),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
 
+    return;
+  }
+
+  final roomToOpen = pendingOpenRoom;
+
+  if (roomToOpen == null) {
+    print('ℹ️ [ROOMS_SCREEN_LISTEN_NO_PENDING_ROOM]');
+    return;
+  }
+
+  final joinedByActiveRoom = next.activeRoomId == roomToOpen.id;
+
+  final usersInRoom = next.usersByRoom[roomToOpen.id] ?? [];
+
+  final myUserId = next.myUserId.trim();
+
+  final joinedByMyUserInUsersList = usersInRoom.any((user) {
+    final userId = (
+      user['userId'] ??
+      user['id'] ??
+      user['_id'] ??
+      ''
+    ).toString().trim();
+
+    return myUserId.isNotEmpty && userId == myUserId;
+  });
+
+  print('🔎 [ROOMS_SCREEN_JOIN_RESULT_CHECK]');
+  print('roomToOpen.id: ${roomToOpen.id}');
+  print('joinedByActiveRoom: $joinedByActiveRoom');
+  print('usersInRoom.length: ${usersInRoom.length}');
+  print('joinedByMyUserInUsersList: $joinedByMyUserInUsersList');
+
+  for (final user in usersInRoom) {
+    print('👤 [ROOMS_SCREEN_JOIN_RESULT_USER]');
+    print('rawUser: $user');
+    print('userId: ${user['userId'] ?? user['id'] ?? user['_id']}');
+    print('username: ${user['username'] ?? user['name']}');
+  }
+
+  if (!joinedByActiveRoom && !joinedByMyUserInUsersList) {
+    print('⏳ [ROOMS_SCREEN_WAITING_FOR_JOIN_CONFIRMATION]');
+    print('reason: activeRoomId not matched and my user not in users list');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    return;
+  }
+
+  pendingOpenRoom = null;
+  isOpeningRoom = false;
+
+  print('✅ [ROOMS_SCREEN_NAVIGATE_TO_ROOM]');
+  print('roomId: ${roomToOpen.id}');
+  print('roomName: ${roomToOpen.name}');
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => RoomChatScreen(room: roomToOpen)),
+  );
+});
     return Scaffold(
-      backgroundColor:
-          Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           RoomsHeader(
@@ -606,45 +680,34 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
           ),
           Expanded(
             child: roomsState.loading
-                ? const Center(
-                    child: CircularProgressIndicator(),
-                  )
+                ? const Center(child: CircularProgressIndicator())
                 : rooms.isEmpty
-                    ? Center(
-                        child: Text(
-                          'لا توجد غرف الآن',
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.color,
-                            fontSize: 15,
-                          ),
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () async {
-                          _roomsNotifier.listRooms(
-                            _tabFromFilter(
-                              selectedFilter,
-                            ),
-                          );
-                        },
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(
-                            bottom: 12,
-                          ),
-                          itemCount: rooms.length,
-                          itemBuilder: (context, index) {
-                            final room = rooms[index];
-
-                            return RoomCard(
-                              room: room,
-                              onTap: () => openRoom(room),
-                            );
-                          },
-                        ),
+                ? Center(
+                    child: Text(
+                      localizations.t('no_rooms_now'),
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                        fontSize: 15,
                       ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      _roomsNotifier.listRooms(_tabFromFilter(selectedFilter));
+                    },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      itemCount: rooms.length,
+                      itemBuilder: (context, index) {
+                        final room = rooms[index];
+
+                        return RoomCard(
+                          room: room,
+                          onTap: () => openRoom(room),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),

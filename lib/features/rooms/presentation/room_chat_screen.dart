@@ -385,14 +385,13 @@ return RoomChatUserModel(
 
     String text = message.text.trim();
 
-    if (message.messageKind == 'join') {
-      text = '${sender.name} دخل';
-    }
+if (message.messageKind == 'join') {
+  text = '${sender.name} __JOIN__';
+}
 
-    if (message.messageKind == 'leave') {
-      text = '${sender.name} خرج';
-    }
-
+if (message.messageKind == 'leave') {
+  text = '${sender.name} __LEAVE__';
+}
     /*
       role لا نعيد كتابته هنا.
       نترك النص القادم من الباك كما هو:

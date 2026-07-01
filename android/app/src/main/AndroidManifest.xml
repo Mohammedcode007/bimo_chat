@@ -51,10 +51,25 @@
     </application>
 
     <queries>
+
+        <!-- للسماح لـ url_launcher بفتح روابط https -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+
+        <!-- للسماح لـ url_launcher بفتح روابط http -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+
+        <!-- مطلوب لخيارات تحديد ونسخ النص في أندرويد -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
+
     </queries>
 
-</manifest>
+</manifest> 
